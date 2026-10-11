@@ -1,0 +1,22 @@
+# Custom snap definition for AirBeats (Linux).
+#
+# electron-builder merges this with its own defaults. The only thing we really
+# need to override is `command:` — the default points at the broken
+# snap-template-electron-4.0-2 `command.sh`. See snap-launcher.sh for details.
+#
+# Everything else here is the standard Electron desktop snap surface:
+# network + audio + the audio-playback/home/removable-media interfaces.
+
+apps:
+  airbeats:
+    command: snap-launcher.sh
+    desktop: usr/share/applications/airbeats.desktop
+    common-id: com.airbeats.standalone
+    plugs:
+      - default
+      - network
+      - network-bind
+      - audio-playback
+      - home
+      - removable-media
+      - opengl

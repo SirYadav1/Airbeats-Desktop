@@ -5,7 +5,11 @@
     "main": "main.js",
     "scripts": {
         "start": "electron .",
-        "build": "electron-builder --win"
+        "build": "electron-builder --publish never",
+        "build:win": "electron-builder --win --publish never",
+        "build:mac": "electron-builder --mac --publish never",
+        "build:linux": "electron-builder --linux --publish never",
+        "build:snap": "electron-builder --linux snap --publish never"
     },
     "build": {
         "appId": "com.airbeats.standalone",
@@ -65,7 +69,17 @@
             "artifactName": "Airbeats-v${version}-linux.${ext}"
         },
         "deb": {
-            "artifactName": "Airbeats-v${version}-linux.${ext}"
+            "artifactName": "Airbeats-v${version}-linux.deb",
+            "depends": [
+                "libfuse2",
+                "libgtk-3-0",
+                "libnotify4",
+                "libnss3",
+                "libxss1",
+                "libxtst6",
+                "xdg-utils",
+                "libatspi2.0-0"
+            ]
         },
         "snapcraft": {
             "artifactName": "Airbeats-v${version}-linux.${ext}",

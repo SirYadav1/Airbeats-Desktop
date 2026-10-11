@@ -654,9 +654,79 @@ def api_lyrics_translate():
         return jsonify(result)
     return jsonify(result), 400
 
+def _pick_port(preferred=8000, tries=25):
+    """Return the first free TCP port at or after `preferred`.
+
+    Port 8000 is hardcoded in the Electron wrapper. If something else already
+    owns it -- a leftover airbeats instance, a dev webserver, another app -- the
+    server used to die with an opaque "Address already in use" traceback and the
+    UI just showed a blank window. Walk forward until we find a free port and
+    publish it so the wrapper can pick it up.
+    """
+    import socket
+    for port in range(preferred, preferred + tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(('127.0.0.1', port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError(
+        f"No free port in range {preferred}-{preferred + tries - 1}"
+    )
+
+
+def _publish_port(port):
+    """Write the chosen port where the Electron wrapper can find it."""
+    candidates = []
+
+    # packaged: sys._MEIPASS (temp, not writable). fallbacks below.
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        candidates.append(os.path.join(meipass, 'port.txt'))
+
+    # Source checkout: next to this file.
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        candidates.append(os.path.join(here, 'port.txt'))
+    except NameError:
+        pass
+
+    # Packaged: next to the real executable (writable, survives the run).
+    try:
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        candidates.append(os.path.join(exe_dir, 'port.txt'))
+    except Exception:
+        pass
+
+    for path in candidates:
+        try:
+            with open(path, 'w', encoding='utf-8') as fh:
+                fh.write(str(port))
+            return path
+        except OSError:
+            continue
+    return None
+
+
 if __name__ == '__main__':
     host = os.environ.get('HOST', '0.0.0.0')
-    port = int(os.environ.get('PORT', 8000))
-    print(f"Server started on {host}:{port}")
-    app.run(host=host, port=port, debug=False)
+    env_port = os.environ.get('PORT')
+    if env_port:
+        PORT = int(env_port)
+    else:
+        try:
+            PORT = _pick_port()
+        except RuntimeError as exc:
+            print(f"AirBeats server: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    written = _publish_port(PORT)
+    if PORT != 8000 and not env_port:
+        print(f"Port 8000 was busy, using {PORT} instead.", file=sys.stderr)
+    print(f"Server started at http://{host}:{PORT}", flush=True)
+    if written:
+        print(f"Port published to {written}", flush=True)
+    app.run(host=host, port=PORT, debug=False, threaded=True)
 

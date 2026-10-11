@@ -65,25 +65,32 @@ window.setDynamicIsland = function(enabled) {
     if (window.electronAPI && window.electronAPI.toggleDynamicIsland) {
         window.electronAPI.toggleDynamicIsland(enabled);
         
-        // Force the island to show up immediately if there is a track playing
+        // push the current track; the island window is created async, so retry
+        // a few times in case the first push arrives before it exists
         if (enabled) {
-            setTimeout(() => {
+            const pushCurrentTrack = (attempt = 0) => {
                 if (typeof currentTrack !== 'undefined' && currentTrack) {
                     const isFav = favoriteSongs.some(s => s.id === currentTrack.id);
                     window.electronAPI.updateDynamicIsland({
                         type: 'track',
-                        title: currentTrack.name,
-                        artist: currentTrack.artist,
-                        image: currentTrack.image,
+                        title: currentTrack.name || currentTrack.title || 'Unknown Track',
+                        // read the same way the rest of the app does
+                        artist: currentTrack.artists?.primary?.[0]?.name
+                            || currentTrack.artist
+                            || currentTrack.artists?.[0]?.name
+                            || 'Unknown Artist',
+                        image: getHighestQualityImage(
+                            currentTrack.image || currentTrack.thumbnail
+                        ),
                         isFav: isFav,
                         isRepeat: window.isRepeat || false
                     });
-                    
+
                     if (document.body.classList.contains('is-playing')) {
                         window.electronAPI.updateDynamicIsland({ type: 'state', state: 'play' });
                     }
-                } else {
-                    // Send a dummy track to force it to show up so user knows it works
+                } else if (attempt === 0) {
+                    // nothing loaded yet, placeholder so the island still renders
                     window.electronAPI.updateDynamicIsland({
                         type: 'track',
                         title: 'Airbeats Desktop',
@@ -93,7 +100,10 @@ window.setDynamicIsland = function(enabled) {
                         isRepeat: false
                     });
                 }
-            }, 500);
+
+                if (attempt < 4) setTimeout(() => pushCurrentTrack(attempt + 1), 250);
+            };
+            pushCurrentTrack(0);
         }
     }
     

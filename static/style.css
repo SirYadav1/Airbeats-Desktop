@@ -2394,3 +2394,510 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     from { opacity: 0; transform: translateY(-5px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* ==========================================
+   CLASSIC HOME SCREEN - FIGMA GRADE STYLES
+   ========================================== */
+@keyframes homeFadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.home-container {
+    padding: 10px 30px 100px 30px;
+    animation: homeFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 100%;
+}
+
+/* CHIPS BAR */
+.home-chips-bar {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 24px;
+    margin-bottom: 12px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.home-chips-bar::-webkit-scrollbar {
+    display: none;
+}
+.home-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 50px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(8px);
+}
+.home-chip:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: var(--text-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.home-chip i {
+    font-size: 13px;
+    color: var(--accent);
+}
+.home-chip.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+}
+.home-chip.active i {
+    color: #000;
+}
+
+/* SHELF CONTAINER */
+.home-shelf {
+    margin-bottom: 44px;
+    position: relative;
+}
+.home-shelf-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+.shelf-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.shelf-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2px;
+}
+.shelf-label-badge {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    background: rgba(198, 227, 85, 0.1);
+    border: 1px solid rgba(198, 227, 85, 0.25);
+    padding: 3px 10px;
+    border-radius: 50px;
+}
+.home-shelf-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.5px;
+}
+.home-shelf-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+.shelf-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.shelf-nav-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.shelf-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+.shelf-see-all {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 50px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.2s ease;
+    margin-right: 6px;
+}
+.shelf-see-all:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+/* HORIZONTAL SCROLL ROW */
+.shelf-scroll-row {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 6px 4px 18px 4px;
+}
+.shelf-scroll-row::-webkit-scrollbar {
+    display: none;
+}
+
+/* 1. QUICK PICKS HERO CAROUSEL CARD */
+.qp-hero-card {
+    width: 230px;
+    min-width: 230px;
+    height: 280px;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    background: #141416;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 14px 35px rgba(0, 0, 0, 0.35);
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+}
+.qp-hero-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 22px 50px rgba(0, 0, 0, 0.6);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+.qp-hero-artwork {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.qp-hero-card:hover .qp-hero-artwork {
+    transform: scale(1.08);
+}
+.qp-hero-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.45) 50%, rgba(0, 0, 0, 0.1) 80%);
+    pointer-events: none;
+}
+.qp-hero-content {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 18px;
+    z-index: 2;
+    pointer-events: none;
+}
+.qp-hero-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+.qp-hero-artist {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.qp-hero-play-btn {
+    position: absolute;
+    bottom: 18px;
+    right: 18px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: scale(0.7) translateY(8px);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 3;
+}
+.qp-hero-card:hover .qp-hero-play-btn {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+.qp-playing-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    z-index: 3;
+    animation: pulseBadge 1.5s infinite ease-in-out;
+}
+@keyframes pulseBadge {
+    0% { transform: scale(1); box-shadow: 0 0 10px rgba(198, 227, 85, 0.4); }
+    50% { transform: scale(1.1); box-shadow: 0 0 20px rgba(198, 227, 85, 0.8); }
+    100% { transform: scale(1); box-shadow: 0 0 10px rgba(198, 227, 85, 0.4); }
+}
+
+/* 2. STANDARD MUSIC CARD */
+.music-shelf-card {
+    width: 160px;
+    min-width: 160px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+}
+.music-shelf-card:hover {
+    transform: translateY(-5px);
+}
+.msc-cover-wrap {
+    width: 160px;
+    height: 160px;
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 12px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: #18181b;
+}
+.msc-cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+.music-shelf-card:hover .msc-cover {
+    transform: scale(1.06);
+}
+.msc-play-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.msc-play-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    transform: scale(0.8);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.music-shelf-card:hover .msc-play-overlay {
+    opacity: 1;
+}
+.music-shelf-card:hover .msc-play-icon {
+    transform: scale(1);
+}
+.msc-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+}
+.msc-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 3. ARTISTS FOR YOU CIRCULAR CARD */
+.artist-shelf-card {
+    width: 140px;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+}
+.artist-shelf-card:hover {
+    transform: translateY(-5px);
+}
+.asc-avatar-wrap {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 12px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+    border: 2.5px solid rgba(255, 255, 255, 0.08);
+    background: #18181b;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.artist-shelf-card:hover .asc-avatar-wrap {
+    border-color: var(--accent);
+    transform: scale(1.05);
+    box-shadow: 0 14px 35px rgba(0, 0, 0, 0.5);
+}
+.asc-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.asc-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.asc-pill {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* 4. FORGOTTEN FAVORITES 2-ROW GRID */
+.forgotten-fav-grid {
+    display: grid;
+    grid-template-rows: repeat(2, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(280px, 320px);
+    gap: 12px 18px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 6px 4px 14px 4px;
+}
+.forgotten-fav-grid::-webkit-scrollbar {
+    display: none;
+}
+.ff-card-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ff-card-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.14);
+    transform: translateX(4px);
+}
+.ff-thumb-wrap {
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.ff-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.ff-play-icon {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.ff-card-item:hover .ff-play-icon {
+    opacity: 1;
+}
+.ff-info {
+    flex: 1;
+    overflow: hidden;
+}
+.ff-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+}
+.ff-artist {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ff-duration {
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.ff-like-btn {
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 6px;
+    flex-shrink: 0;
+}
+

@@ -491,229 +491,640 @@ searchInput.addEventListener('keypress', (e) => {
 // ==========================================
 // VIEWS
 // ==========================================
+window.scrollShelf = function(id, dir) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.scrollBy({ left: dir * 520, behavior: 'smooth' });
+    }
+};
+
+window.playQuickPickTrack = function(songId) {
+    if (window.currentQuickPicksQueue && window.currentQuickPicksQueue.length > 0) {
+        const idx = window.currentQuickPicksQueue.findIndex(s => s.id === songId);
+        if (idx !== -1) {
+            playList(window.currentQuickPicksQueue, idx);
+            return;
+        }
+    }
+    playSingleTrack(songId);
+};
+
+window.playShelfItem = function(id, type) {
+    if (type === 'song') {
+        playSingleTrack(id);
+    } else if (type === 'album') {
+        window.location.hash = `#album/${id}`;
+    } else if (type === 'artist') {
+        window.location.hash = `#artist/${id}`;
+    } else if (type === 'playlist') {
+        window.location.hash = `#playlist/${id}`;
+    } else {
+        playSingleTrack(id);
+    }
+};
+
+function safeEscape(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 async function renderHome() {
     document.getElementById('globalLoading').style.display = 'flex';
     routerView.innerHTML = '';
 
-    // 1. Get cached state
+    // 1. Get cached local state
     const history = JSON.parse(localStorage.getItem('playHistory') || '[]');
+    const favs = JSON.parse(localStorage.getItem('favoriteSongs') || '[]');
     const playedArtists = JSON.parse(localStorage.getItem('playedArtists') || '[]');
     const lastPlayedAlbumStr = localStorage.getItem('lastPlayedAlbum');
     let lastPlayedAlbum = null;
     try { if (lastPlayedAlbumStr) lastPlayedAlbum = JSON.parse(lastPlayedAlbumStr); } catch(e){}
 
-    const isNewUser = history.length === 0;
+    const currentTrack = (typeof window.getCurrentTrack === 'function') ? window.getCurrentTrack() : null;
+    const currentPlayingId = currentTrack ? currentTrack.id : null;
+    const isPlayingNow = document.body.classList.contains('is-playing');
 
-    let mfySongs = [];
-    let artistsForYou = [];
-    
-    // Start trending and popular artists fetches immediately
-    const trendingPromise = fetch('/api/search/songs?query=latest&limit=15').then(r => r.json());
-    const artistsPromise = fetch('/api/search/artists?query=trending&limit=6').then(r => r.json());
-
-    let artistRecPromises = [];
-    let songRecPromises = [];
-    
-    if (!isNewUser) {
-        const artistIdsFromHistory = [...new Set(history.map(s => s.artists?.primary?.[0]?.id).filter(Boolean))].slice(0, 3);
-        const topSongsFromHistory = history.slice(0, 3).map(s => s.id);
-        
-        artistRecPromises = artistIdsFromHistory.map(id => fetch(`/api/artists/${id}/songs?page=1`).then(r => r.json()).catch(() => ({})));
-        songRecPromises = topSongsFromHistory.map(id => fetch(`/api/songs/related?id=${id}`).then(r => r.json()).catch(() => ({})));
+    // 2. Determine top artist for "Similar To"
+    let topArtist = null;
+    if (playedArtists.length > 0) {
+        topArtist = playedArtists[0];
+    } else if (history.length > 0) {
+        const hSong = history.find(s => s.artists?.primary?.[0]?.name);
+        if (hSong) {
+            const a = hSong.artists.primary[0];
+            topArtist = { id: a.id || '', name: a.name || '' };
+        }
     }
 
     try {
-        const [trending, artistsRes, artistRes, songRes] = await Promise.all([
-            trendingPromise,
-            artistsPromise,
-            Promise.all(artistRecPromises),
-            Promise.all(songRecPromises)
-        ]);
-
-        if (!isNewUser) {
-            artistRes.forEach(r => { if (r.data && r.data.songs) mfySongs.push(...r.data.songs); });
-            songRes.forEach(r => { if (r.data) mfySongs.push(...r.data); });
-            
-            artistsForYou = [];
-            
-            const uniqueSongs = [];
-            const ids = new Set();
-            for (let s of mfySongs) {
-                if (!ids.has(s.id)) {
-                    ids.add(s.id);
-                    uniqueSongs.push(s);
-                }
-            }
-            
-            for (let i = uniqueSongs.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [uniqueSongs[i], uniqueSongs[j]] = [uniqueSongs[j], uniqueSongs[i]];
-            }
-            
-            mfySongs = uniqueSongs.slice(0, 20);
+        // Parallel fetch for home feed and similar recommendations
+        const homePromise = fetch('/api/home').then(r => r.json()).catch(() => ({ success: false }));
+        let similarPromise = Promise.resolve({ success: false, data: [] });
+        if (topArtist && (topArtist.id || topArtist.name)) {
+            const url = topArtist.id 
+                ? `/api/similar_to?artist_id=${topArtist.id}`
+                : `/api/similar_to?artist_name=${encodeURIComponent(topArtist.name)}`;
+            similarPromise = fetch(url).then(r => r.json()).catch(() => ({ success: false, data: [] }));
         }
 
-    let html = '';
+        const [homeRes, similarRes] = await Promise.all([homePromise, similarPromise]);
+        const homeData = (homeRes && homeRes.success && homeRes.data) ? homeRes.data : {};
+        const similarTracks = (similarRes && similarRes.success && Array.isArray(similarRes.data)) ? similarRes.data : [];
 
-    // Render Popular Artists
-    let popularHtml = `
-    <div class="section-header">
-        <h2>Popular artists</h2>
-    </div>
-    <div class="grid-container" style="gap: 20px; justify-content: flex-start; margin-bottom: 50px;">
-    `;
-    if (artistsRes.data && artistsRes.data.results) {
-        artistsRes.data.results.slice(0, 6).forEach(art => {
-            const img = getHighestQualityImage(art.image);
-            popularHtml += `
-            <div class="artist-card" onclick="window.location.hash='#artist/${art.id}'">
-                <div class="card-img-wrapper">
-                    <img src="${img}">
-                </div>
-                <div class="card-title">${art.name || art.title}</div>
-            </div>`;
+        // If no topArtist existed yet, pick the first popular artist
+        if (!topArtist && homeData.popular_artists && homeData.popular_artists.length > 0) {
+            topArtist = homeData.popular_artists[0];
+        }
+
+        let html = `<div class="home-container">`;
+
+        // ==========================================
+        // 1. TOP QUICK ACTION CHIPS ROW (Android Airbeats style)
+        // ==========================================
+        html += `
+        <div class="home-chips-bar">
+            <a href="#history" class="home-chip"><i class="fas fa-history"></i> Recently Played</a>
+            <a href="#favorites" class="home-chip"><i class="fas fa-heart"></i> Favorite Songs</a>
+            <a href="#playlists" class="home-chip"><i class="fas fa-list-music"></i> Playlists</a>
+            <a href="#cached" class="home-chip"><i class="fas fa-arrow-down-to-bracket"></i> Cached Songs</a>
+            <a href="#new-releases" class="home-chip"><i class="fas fa-compact-disc"></i> New Releases</a>
+            <a href="javascript:void(0)" onclick="window.playMadeForYouShuffle()" class="home-chip"><i class="fas fa-shuffle"></i> Shuffle Play</a>
+        </div>
+        `;
+
+        // ==========================================
+        // 2. QUICK PICKS (Hero Carousel Showcase)
+        // ==========================================
+        // Build Quick Picks: User's top frequent / liked songs, augmented by remote quick picks
+        let combinedQuickPicks = [];
+        const seenIds = new Set();
+
+        // Add favorites first
+        favs.slice(0, 10).forEach(s => {
+            if (!seenIds.has(s.id)) {
+                seenIds.add(s.id);
+                combinedQuickPicks.push(s);
+            }
         });
-    }
-    popularHtml += `</div>`;
+        // Add recent history
+        history.slice(0, 10).forEach(s => {
+            if (!seenIds.has(s.id)) {
+                seenIds.add(s.id);
+                combinedQuickPicks.push(s);
+            }
+        });
+        // Supplement from remote quick_picks
+        if (homeData.quick_picks && Array.isArray(homeData.quick_picks)) {
+            homeData.quick_picks.forEach(s => {
+                if (!seenIds.has(s.id)) {
+                    seenIds.add(s.id);
+                    combinedQuickPicks.push(s);
+                }
+            });
+        }
 
-    // Render Trending Songs
-    let trendingHtml = `
-    <div class="section-header">
-        <h2>Trending songs</h2>
-    </div>
-    <div style="margin-bottom: 50px;">
-        <table class="tracklist">
-    `;
-    if (trending.data && trending.data.results) {
-        window.currentTrendingQueue = trending.data.results;
-        trending.data.results.forEach((song, i) => {
-            window.allTracks[song.id] = song;
-            const img = getHighestQualityImage(song.image);
-            trendingHtml += `
-            <tr class="track-row" onclick="playSingleTrack('${song.id}')" style="cursor:pointer">
-                <td class="track-num">
-                    <span class="track-num-txt">${i+1}</span>
-                    <i class="fas fa-play track-play-icon"></i>
-                </td>
-                <td>
-                    <div class="track-info-cell">
-                        <img src="${img}" class="track-thumb">
-                        <div>
-                            <div class="track-title">${song.name}</div>
-                            <div class="track-artist">${getClickableArtistsHtml(song)}</div>
+        combinedQuickPicks = combinedQuickPicks.slice(0, 20);
+        window.currentQuickPicksQueue = combinedQuickPicks;
+        combinedQuickPicks.forEach(s => { window.allTracks[s.id] = s; });
+
+        if (combinedQuickPicks.length > 0) {
+            html += `
+            <div class="home-shelf">
+                <div class="home-shelf-header">
+                    <div class="shelf-header-left">
+                        <div class="shelf-badge-row">
+                            <span class="shelf-label-badge"><i class="fas fa-bolt" style="margin-right: 4px;"></i> Start Radio</span>
+                        </div>
+                        <h2 class="home-shelf-title">Quick Picks</h2>
+                        <p class="home-shelf-subtitle">Curated tracks and instant radio based on your listening flow</p>
+                    </div>
+                    <div class="shelf-actions">
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-quick-picks', -1)" title="Scroll Left"><i class="fas fa-chevron-left"></i></button>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-quick-picks', 1)" title="Scroll Right"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="shelf-scroll-row" id="shelf-quick-picks">
+            `;
+
+            combinedQuickPicks.forEach((song, idx) => {
+                const img = getHighestQualityImage(song.image);
+                const isThisPlaying = (song.id === currentPlayingId && isPlayingNow);
+                const artistStr = song.subtitle || song.artists?.primary?.map(a => a.name).join(', ') || 'Artist';
+
+                html += `
+                <div class="qp-hero-card" onclick="window.playQuickPickTrack('${song.id}')">
+                    <img src="${img}" class="qp-hero-artwork" loading="lazy">
+                    <div class="qp-hero-gradient"></div>
+                    ${isThisPlaying ? `<div class="qp-playing-badge" title="Now Playing"><i class="fas fa-volume-up"></i></div>` : ''}
+                    <div class="qp-hero-content">
+                        <div class="qp-hero-title">${safeEscape(song.name || song.title)}</div>
+                        <div class="qp-hero-artist">${safeEscape(artistStr)}</div>
+                    </div>
+                    <div class="qp-hero-play-btn"><i class="fas fa-play"></i></div>
+                </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        }
+
+        // ==========================================
+        // 3. KEEP LISTENING
+        // ==========================================
+        // Sourced from playHistory, lastPlayedAlbum, and starter recommendations
+        let keepListeningItems = [];
+        const keepIds = new Set();
+
+        if (history.length > 0) {
+            history.slice(0, 12).forEach(s => {
+                if (!keepIds.has(s.id)) {
+                    keepIds.add(s.id);
+                    keepListeningItems.push({
+                        id: s.id,
+                        title: s.name || s.title,
+                        subtitle: s.subtitle || s.artists?.primary?.map(a => a.name).join(', ') || 'Track',
+                        image: s.image,
+                        type: 'song',
+                        raw: s
+                    });
+                }
+            });
+        } else if (homeData.quick_picks && homeData.quick_picks.length > 0) {
+            homeData.quick_picks.slice(0, 10).forEach(s => {
+                if (!keepIds.has(s.id)) {
+                    keepIds.add(s.id);
+                    keepListeningItems.push({
+                        id: s.id,
+                        title: s.name || s.title,
+                        subtitle: s.subtitle || 'Track',
+                        image: s.image,
+                        type: 'song',
+                        raw: s
+                    });
+                }
+            });
+        }
+
+        if (keepListeningItems.length > 0) {
+            html += `
+            <div class="home-shelf">
+                <div class="home-shelf-header">
+                    <div class="shelf-header-left">
+                        <div class="shelf-badge-row">
+                            <span class="shelf-label-badge"><i class="fas fa-clock-rotate-left" style="margin-right: 4px;"></i> Jump Back In</span>
+                        </div>
+                        <h2 class="home-shelf-title">Keep Listening</h2>
+                        <p class="home-shelf-subtitle">Pick up right where you left off</p>
+                    </div>
+                    <div class="shelf-actions">
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-keep-listening', -1)"><i class="fas fa-chevron-left"></i></button>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-keep-listening', 1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="shelf-scroll-row" id="shelf-keep-listening">
+            `;
+
+            keepListeningItems.forEach(item => {
+                const img = getHighestQualityImage(item.image);
+                if (item.raw) window.allTracks[item.id] = item.raw;
+                html += `
+                <div class="music-shelf-card" onclick="window.playShelfItem('${item.id}', '${item.type}')">
+                    <div class="msc-cover-wrap">
+                        <img src="${img}" class="msc-cover" loading="lazy">
+                        <div class="msc-play-overlay">
+                            <div class="msc-play-icon"><i class="fas fa-play"></i></div>
                         </div>
                     </div>
-                </td>
-                <td style="color:var(--text-secondary)">${formatTime(song.duration)}</td>
-            </tr>`;
-        });
-    }
-    trendingHtml += `</table></div>`;
-
-    if (isNewUser) {
-        // NEW USER VIEW
-        html += popularHtml;
-        html += trendingHtml;
-    } else {
-        // RETURNING USER VIEW
-        
-        // 1. Hero Banner
-        if (lastPlayedAlbum && lastPlayedAlbum.image) { const bannerImg = getHighestQualityImage(lastPlayedAlbum.image);
-            html += `
-            <div class="banner-card" style="background: url('${lastPlayedAlbum.image}') no-repeat center center; background-size: cover; cursor: pointer; overflow: hidden; position: relative;" onclick="if('${lastPlayedAlbum.id}') window.location.hash='#album/${lastPlayedAlbum.id}'">
-                <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 1;"></div>
-                <div class="banner-content" style="position: relative; z-index: 2;">
-                    <div class="banner-label">LAST PLAYED</div>
-                    <div class="banner-title" style="text-shadow: 0 4px 10px rgba(0,0,0,0.5);">${lastPlayedAlbum.name}</div>
-                    <div class="banner-desc" style="text-shadow: 0 2px 5px rgba(0,0,0,0.5);">By ${lastPlayedAlbum.artist}</div>
+                    <div class="msc-title">${safeEscape(item.title)}</div>
+                    <div class="msc-subtitle">${safeEscape(item.subtitle)}</div>
                 </div>
-                <img src="${lastPlayedAlbum.image}" class="banner-artist-img" style="z-index: 2; box-shadow: 0 10px 30px rgba(0,0,0,0.7); border-radius: 8px;">
-            </div>`;
+                `;
+            });
+
+            html += `</div></div>`;
         }
 
-        // 2. Made For You
-        if (mfySongs.length > 0) {
-            window.currentMfyQueue = mfySongs;
-            let mfyHtml = `
-            <div class="section-header">
-                <h2>Made for you</h2>
-            </div>
-            <div class="grid-container" style="gap: 20px; justify-content: flex-start; margin-bottom: 50px;">
+        // ==========================================
+        // 4. FRESH FINDS
+        // ==========================================
+        const freshFindsList = (homeData.fresh_finds && homeData.fresh_finds.length > 0) 
+            ? homeData.fresh_finds 
+            : (homeData.quick_picks ? homeData.quick_picks.slice(5, 17) : []);
+
+        if (freshFindsList.length > 0) {
+            freshFindsList.forEach(s => { window.allTracks[s.id] = s; });
+            html += `
+            <div class="home-shelf">
+                <div class="home-shelf-header">
+                    <div class="shelf-header-left">
+                        <div class="shelf-badge-row">
+                            <span class="shelf-label-badge"><i class="fas fa-sparkles" style="margin-right: 4px;"></i> Discovery</span>
+                        </div>
+                        <h2 class="home-shelf-title">Fresh Finds</h2>
+                        <p class="home-shelf-subtitle">Fresh new discoveries, trending indie hits, and rising stars</p>
+                    </div>
+                    <div class="shelf-actions">
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-fresh-finds', -1)"><i class="fas fa-chevron-left"></i></button>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-fresh-finds', 1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="shelf-scroll-row" id="shelf-fresh-finds">
             `;
-            mfySongs.forEach((song, i) => {
-                window.allTracks[song.id] = song;
+
+            freshFindsList.forEach(song => {
                 const img = getHighestQualityImage(song.image);
-                mfyHtml += `
-                <div class="album-card" onclick="playSingleTrack('${song.id}')">
-                    <div class="card-img-wrapper">
-                        <img src="${img}">
+                const artistStr = song.subtitle || song.artists?.primary?.map(a => a.name).join(', ') || 'Artist';
+                html += `
+                <div class="music-shelf-card" onclick="playSingleTrack('${song.id}')">
+                    <div class="msc-cover-wrap">
+                        <img src="${img}" class="msc-cover" loading="lazy">
+                        <div class="msc-play-overlay">
+                            <div class="msc-play-icon"><i class="fas fa-play"></i></div>
+                        </div>
                     </div>
-                    <div class="card-title" style="margin-top: 4px;">${song.name}</div>
-                    <div style="font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${getClickableArtistsHtml(song)}</div>
-                </div>`;
-            });
-            mfyHtml += `</div>`;
-            html += mfyHtml;
-        }
-
-        if (artistsForYou.length > 0) {
-            let afyHtml = `
-            <div class="section-header">
-                <h2>Artists for you</h2>
-            </div>
-            <div class="grid-container" style="gap: 20px; justify-content: flex-start; margin-bottom: 50px;">
-            `;
-            artistsForYou.forEach(art => {
-                afyHtml += `
-                <div class="card" onclick="window.location.hash='#artist/${art.id}'" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; width: 140px;">
-                    <div class="card-img-wrapper artist-img" style="width: 140px; height: 140px; border-radius: 50%; overflow: hidden; box-shadow: 0 8px 16px rgba(0,0,0,0.1); margin-bottom: 12px;">
-                        <img src="${getHighestQualityImage(art.image)}" style="width: 100%; height: 100%; object-fit: cover;">
-                    </div>
-                    <div class="card-title" style="font-size: 14px; font-weight: 600; color: var(--text-primary); text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${art.name}</div>
-                    <div class="card-subtitle" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; text-align: center; width: 100%;">Artist</div>
-                </div>`;
-            });
-            afyHtml += `</div>`;
-            html += afyHtml;
-        }
-
-        // 3. Popular Artists
-        html += popularHtml;
-
-        // 4. Trending Songs
-        html += trendingHtml;
-
-        // 5. Recently Played
-        html += `
-        <div class="section-header">
-            <h2>Recently played</h2>
-        </div>
-        <div class="recent-list" style="margin-bottom: 50px;">
-        `;
-        history.slice(0, 10).forEach((song, i) => {
-            const img = getHighestQualityImage(song.image);
-            const artistName = song.artists?.primary?.[0]?.name || 'Unknown';
-            html += `
-            <div class="recent-row" onclick="playSingleTrack('${song.id}')">
-                <img src="${img}" class="recent-img">
-                <div class="recent-info">
-                    <div class="recent-title">${song.name}</div>
+                    <div class="msc-title">${safeEscape(song.name || song.title)}</div>
+                    <div class="msc-subtitle">${safeEscape(artistStr)}</div>
                 </div>
-                <div class="recent-artist">${artistName}</div>
-                <div class="recent-time">${formatTime(song.duration)}</div>
-            </div>
-            `;
-        });
-        html += `</div>`;
-    }
+                `;
+            });
 
-    document.getElementById('globalLoading').style.display = 'none';
-    routerView.innerHTML = html;
-    
-    } catch(e) { 
+            html += `</div></div>`;
+        }
+
+        // ==========================================
+        // 5. ARTISTS FOR YOU (Circular Avatar Shelf)
+        // ==========================================
+        let artistsForYouList = [];
+        const artistIds = new Set();
+
+        playedArtists.forEach(art => {
+            if (!artistIds.has(art.id)) {
+                artistIds.add(art.id);
+                artistsForYouList.push(art);
+            }
+        });
+
+        if (homeData.popular_artists && Array.isArray(homeData.popular_artists)) {
+            homeData.popular_artists.forEach(art => {
+                if (!artistIds.has(art.id)) {
+                    artistIds.add(art.id);
+                    artistsForYouList.push(art);
+                }
+            });
+        }
+
+        artistsForYouList = artistsForYouList.slice(0, 14);
+
+        if (artistsForYouList.length > 0) {
+            html += `
+            <div class="home-shelf">
+                <div class="home-shelf-header">
+                    <div class="shelf-header-left">
+                        <div class="shelf-badge-row">
+                            <span class="shelf-label-badge"><i class="fas fa-user-music" style="margin-right: 4px;"></i> For You</span>
+                        </div>
+                        <h2 class="home-shelf-title">Artists For You</h2>
+                        <p class="home-shelf-subtitle">Creators and voices tuned to your personal taste</p>
+                    </div>
+                    <div class="shelf-actions">
+                        <a href="#artists" class="shelf-see-all">See All</a>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-artists-for-you', -1)"><i class="fas fa-chevron-left"></i></button>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-artists-for-you', 1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="shelf-scroll-row" id="shelf-artists-for-you">
+            `;
+
+            artistsForYouList.forEach(art => {
+                const img = getHighestQualityImage(art.image);
+                html += `
+                <div class="artist-shelf-card" onclick="window.location.hash='#artist/${art.id}'">
+                    <div class="asc-avatar-wrap">
+                        <img src="${img}" class="asc-avatar" loading="lazy">
+                    </div>
+                    <div class="asc-name">${safeEscape(art.name || art.title)}</div>
+                    <div class="asc-pill">Artist</div>
+                </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        }
+
+        // ==========================================
+        // 6. SIMILAR TO <ARTIST NAME>
+        // ==========================================
+        if (topArtist && topArtist.name) {
+            let simList = similarTracks;
+            // Fallback if empty: use songs from homeData
+            if (simList.length === 0 && homeData.quick_picks) {
+                simList = homeData.quick_picks.slice(0, 10);
+            }
+
+            if (simList.length > 0) {
+                simList.forEach(s => { window.allTracks[s.id] = s; });
+                const topArtistImg = getHighestQualityImage(topArtist.image);
+
+                html += `
+                <div class="home-shelf">
+                    <div class="home-shelf-header">
+                        <div class="shelf-header-left">
+                            <div class="shelf-badge-row">
+                                <span class="shelf-label-badge"><i class="fas fa-waveform-lines" style="margin-right: 4px;"></i> Similar To</span>
+                            </div>
+                            <h2 class="home-shelf-title">
+                                ${topArtist.image ? `<img src="${topArtistImg}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; margin-right:4px;">` : ''}
+                                Similar to ${safeEscape(topArtist.name)}
+                            </h2>
+                            <p class="home-shelf-subtitle">Recommended music matching the sound of ${safeEscape(topArtist.name)}</p>
+                        </div>
+                        <div class="shelf-actions">
+                            <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-similar-to', -1)"><i class="fas fa-chevron-left"></i></button>
+                            <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-similar-to', 1)"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <div class="shelf-scroll-row" id="shelf-similar-to">
+                `;
+
+                simList.forEach(song => {
+                    const img = getHighestQualityImage(song.image);
+                    const artistStr = song.subtitle || song.artists?.primary?.map(a => a.name).join(', ') || 'Artist';
+                    html += `
+                    <div class="music-shelf-card" onclick="playSingleTrack('${song.id}')">
+                        <div class="msc-cover-wrap">
+                            <img src="${img}" class="msc-cover" loading="lazy">
+                            <div class="msc-play-overlay">
+                                <div class="msc-play-icon"><i class="fas fa-play"></i></div>
+                            </div>
+                        </div>
+                        <div class="msc-title">${safeEscape(song.name || song.title)}</div>
+                        <div class="msc-subtitle">${safeEscape(artistStr)}</div>
+                    </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            }
+        }
+
+        // ==========================================
+        // 7. DANCING ON YOUR OWN (Mood & Vibe Shelf)
+        // ==========================================
+        let danceItems = homeData.dancing_on_your_own;
+        if (!danceItems || danceItems.length === 0) {
+            // Check in sections for dance/energy
+            const dSec = (homeData.sections || []).find(s => s.title.toLowerCase().includes('dance') || s.title.toLowerCase().includes('party'));
+            if (dSec) danceItems = dSec.items;
+        }
+
+        if (danceItems && danceItems.length > 0) {
+            html += `
+            <div class="home-shelf">
+                <div class="home-shelf-header">
+                    <div class="shelf-header-left">
+                        <div class="shelf-badge-row">
+                            <span class="shelf-label-badge"><i class="fas fa-headphones" style="margin-right: 4px;"></i> Mood & Vibe</span>
+                        </div>
+                        <h2 class="home-shelf-title">Dancing on your own</h2>
+                        <p class="home-shelf-subtitle">High-energy bops & dance hits when you just want to let loose</p>
+                    </div>
+                    <div class="shelf-actions">
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-dancing-own', -1)"><i class="fas fa-chevron-left"></i></button>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-dancing-own', 1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="shelf-scroll-row" id="shelf-dancing-own">
+            `;
+
+            danceItems.forEach(item => {
+                const img = getHighestQualityImage(item.image);
+                html += `
+                <div class="music-shelf-card" onclick="window.playShelfItem('${item.id}', '${item.type}')">
+                    <div class="msc-cover-wrap">
+                        <img src="${img}" class="msc-cover" loading="lazy">
+                        <div class="msc-play-overlay">
+                            <div class="msc-play-icon"><i class="fas fa-play"></i></div>
+                        </div>
+                    </div>
+                    <div class="msc-title">${safeEscape(item.title || item.name)}</div>
+                    <div class="msc-subtitle">${safeEscape(item.subtitle || 'Playlist')}</div>
+                </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        }
+
+        // ==========================================
+        // 8. NEW RELEASES
+        // ==========================================
+        if (homeData.new_releases && homeData.new_releases.length > 0) {
+            html += `
+            <div class="home-shelf">
+                <div class="home-shelf-header">
+                    <div class="shelf-header-left">
+                        <div class="shelf-badge-row">
+                            <span class="shelf-label-badge"><i class="fas fa-fire" style="margin-right: 4px;"></i> Latest Drops</span>
+                        </div>
+                        <h2 class="home-shelf-title">New Releases</h2>
+                        <p class="home-shelf-subtitle">Brand new albums and fresh singles</p>
+                    </div>
+                    <div class="shelf-actions">
+                        <a href="#new-releases" class="shelf-see-all">See All</a>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-new-releases', -1)"><i class="fas fa-chevron-left"></i></button>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-new-releases', 1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="shelf-scroll-row" id="shelf-new-releases">
+            `;
+
+            homeData.new_releases.slice(0, 15).forEach(album => {
+                const img = getHighestQualityImage(album.image);
+                html += `
+                <div class="music-shelf-card" onclick="window.location.hash='#album/${album.id}'">
+                    <div class="msc-cover-wrap">
+                        <img src="${img}" class="msc-cover" loading="lazy">
+                        <div class="msc-play-overlay">
+                            <div class="msc-play-icon"><i class="fas fa-compact-disc"></i></div>
+                        </div>
+                    </div>
+                    <div class="msc-title">${safeEscape(album.name || album.title)}</div>
+                    <div class="msc-subtitle">${safeEscape(album.subtitle || 'Album')}</div>
+                </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        }
+
+        // ==========================================
+        // 9. FORGOTTEN FAVORITES (Multi-row Grid)
+        // ==========================================
+        // Liked songs that haven't been played in the last 10 plays of history
+        const recentHistoryIds = new Set(history.slice(0, 10).map(s => s.id));
+        let forgottenFavs = favs.filter(s => !recentHistoryIds.has(s.id));
+        
+        // If not enough forgotten favorites, include all favorites or chart hits
+        if (forgottenFavs.length < 4 && favs.length > 0) {
+            forgottenFavs = favs;
+        } else if (forgottenFavs.length === 0 && homeData.quick_picks) {
+            forgottenFavs = homeData.quick_picks.slice(10, 18);
+        }
+
+        if (forgottenFavs.length > 0) {
+            forgottenFavs.forEach(s => { window.allTracks[s.id] = s; });
+
+            html += `
+            <div class="home-shelf">
+                <div class="home-shelf-header">
+                    <div class="shelf-header-left">
+                        <div class="shelf-badge-row">
+                            <span class="shelf-label-badge"><i class="fas fa-heart-crack" style="margin-right: 4px;"></i> Rediscover</span>
+                        </div>
+                        <h2 class="home-shelf-title">Forgotten Favorites</h2>
+                        <p class="home-shelf-subtitle">Tracks you loved that deserve another spin</p>
+                    </div>
+                    <div class="shelf-actions">
+                        <a href="#favorites" class="shelf-see-all">Favorites</a>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-forgotten-favs', -1)"><i class="fas fa-chevron-left"></i></button>
+                        <button class="shelf-nav-btn" onclick="window.scrollShelf('shelf-forgotten-favs', 1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="forgotten-fav-grid" id="shelf-forgotten-favs">
+            `;
+
+            forgottenFavs.forEach(song => {
+                const img = getHighestQualityImage(song.image);
+                const artistStr = song.subtitle || song.artists?.primary?.map(a => a.name).join(', ') || 'Artist';
+                const isFav = favs.some(f => f.id === song.id);
+
+                html += `
+                <div class="ff-card-item" onclick="playSingleTrack('${song.id}')">
+                    <div class="ff-thumb-wrap">
+                        <img src="${img}" class="ff-thumb" loading="lazy">
+                        <div class="ff-play-icon"><i class="fas fa-play"></i></div>
+                    </div>
+                    <div class="ff-info">
+                        <div class="ff-title">${safeEscape(song.name || song.title)}</div>
+                        <div class="ff-artist">${safeEscape(artistStr)}</div>
+                    </div>
+                    <div class="ff-duration">${formatTime(song.duration)}</div>
+                    <div class="ff-like-btn" onclick="event.stopPropagation(); window.toggleHeart(event, '${song.id}')">
+                        <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
+                    </div>
+                </div>
+                `;
+            });
+
+            html += `</div></div>`;
+        }
+
+        // ==========================================
+        // 10. DYNAMIC BROWSE SECTIONS FROM YOUTUBE MUSIC
+        // ==========================================
+        if (homeData.sections && Array.isArray(homeData.sections)) {
+            const skipWords = ['quick', 'dancing', 'fresh', 'new release'];
+            homeData.sections.forEach((sec, sIdx) => {
+                const secTitleLower = (sec.title || '').toLowerCase();
+                if (skipWords.some(w => secTitleLower.includes(w))) return;
+                if (!sec.items || sec.items.length === 0) return;
+
+                const shelfDomId = `shelf-dyn-${sIdx}`;
+                html += `
+                <div class="home-shelf">
+                    <div class="home-shelf-header">
+                        <div class="shelf-header-left">
+                            <h2 class="home-shelf-title">${safeEscape(sec.title)}</h2>
+                        </div>
+                        <div class="shelf-actions">
+                            <button class="shelf-nav-btn" onclick="window.scrollShelf('${shelfDomId}', -1)"><i class="fas fa-chevron-left"></i></button>
+                            <button class="shelf-nav-btn" onclick="window.scrollShelf('${shelfDomId}', 1)"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <div class="shelf-scroll-row" id="${shelfDomId}">
+                `;
+
+                sec.items.forEach(item => {
+                    const img = getHighestQualityImage(item.image);
+                    if (item.type === 'song') window.allTracks[item.id] = item;
+                    html += `
+                    <div class="music-shelf-card" onclick="window.playShelfItem('${item.id}', '${item.type}')">
+                        <div class="msc-cover-wrap">
+                            <img src="${img}" class="msc-cover" loading="lazy">
+                            <div class="msc-play-overlay">
+                                <div class="msc-play-icon"><i class="fas fa-play"></i></div>
+                            </div>
+                        </div>
+                        <div class="msc-title">${safeEscape(item.title || item.name)}</div>
+                        <div class="msc-subtitle">${safeEscape(item.subtitle || '')}</div>
+                    </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            });
+        }
+
+        html += `</div>`; // End home-container
+
         document.getElementById('globalLoading').style.display = 'none';
-        console.error('Home render error', e); 
-        routerView.innerHTML = '<div style="color:red; padding: 20px;">Failed to load home.</div>';
+        routerView.innerHTML = html;
+
+    } catch (e) {
+        document.getElementById('globalLoading').style.display = 'none';
+        console.error('Home render error', e);
+        routerView.innerHTML = `
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+            <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: var(--accent); margin-bottom: 20px;"></i>
+            <h2 style="color: var(--text-primary); margin-bottom: 10px;">Failed to load Home screen</h2>
+            <p>Please check your connection or restart the server.</p>
+            <button class="btn-primary" onclick="renderHome()" style="margin: 20px auto 0 auto;">Retry</button>
+        </div>`;
     }
 }
 

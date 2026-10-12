@@ -4,6 +4,7 @@ import requests
 import os
 import json
 import threading
+import time
 from flask import request, jsonify, redirect, send_file
 
 yt = YTMusic()
@@ -92,13 +93,51 @@ def format_album(album):
 
 def format_playlist(playlist):
     return {
-        "id": playlist.get("browseId", ""),
+        "id": playlist.get("browseId", "") or playlist.get("playlistId", ""),
         "name": playlist.get("title", ""),
         "title": playlist.get("title", ""),
         "subtitle": playlist.get("author", "Playlist"),
         "type": "playlist",
         "image": [{"quality": "500x500", "url": playlist.get("thumbnails", [{"url": "https://via.placeholder.com/150"}])[-1]["url"] if playlist.get("thumbnails") else "https://via.placeholder.com/150"}]
     }
+
+def format_home_shelf_item(item):
+    if not item:
+        return None
+    if "videoId" in item:
+        return format_song(item)
+    elif "playlistId" in item:
+        title = item.get("title", "")
+        p_id = item.get("playlistId", "")
+        thumbs = item.get("thumbnails", [])
+        img = thumbs[-1]["url"] if thumbs else "https://via.placeholder.com/150"
+        desc = item.get("description", "")
+        return {
+            "id": p_id,
+            "title": title,
+            "name": title,
+            "subtitle": desc or "Playlist",
+            "type": "playlist",
+            "image": [{"quality": "500x500", "url": img}]
+        }
+    elif "browseId" in item:
+        title = item.get("title", "")
+        b_id = item.get("browseId", "")
+        thumbs = item.get("thumbnails", [])
+        img = thumbs[-1]["url"] if thumbs else "https://via.placeholder.com/150"
+        artists = item.get("artists", [])
+        art_name = ", ".join([a.get("name", "") for a in artists]) if artists else item.get("description", "")
+        is_artist = "artist" in str(item.get("subscribers", "")).lower() or "artist" in str(item.get("subtitle", "")).lower()
+        item_type = "artist" if is_artist else "album"
+        return {
+            "id": b_id,
+            "title": title,
+            "name": title,
+            "subtitle": art_name or ("Artist" if is_artist else "Album"),
+            "type": item_type,
+            "image": [{"quality": "500x500", "url": img}]
+        }
+    return None
 
 def add_yt_routes(app, get_lyrics_fn):
     @app.route('/api/search/songs')
@@ -211,13 +250,150 @@ def add_yt_routes(app, get_lyrics_fn):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
 
+    _home_cache = {"timestamp": 0, "data": None}
+    _home_cache_lock = threading.Lock()
+
     @app.route('/api/home')
     def api_home():
+        nonlocal _home_cache
+        now = time.time()
+        with _home_cache_lock:
+            if _home_cache["data"] and (now - _home_cache["timestamp"] < 600):
+                return jsonify({"success": True, "data": _home_cache["data"]})
+        
         try:
-            home_data = yt.get_home(limit=5)
-            return jsonify({"success": True, "data": home_data})
+            home_raw = yt.get_home(limit=14)
+            quick_picks = []
+            dancing_on_your_own = []
+            fresh_finds = []
+            sections = []
+            
+            for sec in home_raw:
+                sec_title = sec.get("title", "")
+                contents = sec.get("contents", [])
+                formatted_items = []
+                for it in contents:
+                    f = format_home_shelf_item(it)
+                    if f:
+                        formatted_items.append(f)
+                
+                if not formatted_items:
+                    continue
+                
+                lower_title = sec_title.lower()
+                if "quick" in lower_title and not quick_picks:
+                    quick_picks = [i for i in formatted_items if i.get("type") == "song"]
+                elif "dancing" in lower_title and not dancing_on_your_own:
+                    dancing_on_your_own = formatted_items
+                elif ("fresh" in lower_title or "finds" in lower_title) and not fresh_finds:
+                    fresh_finds = formatted_items
+                
+                sections.append({
+                    "title": sec_title,
+                    "items": formatted_items
+                })
+            
+            # If quick_picks is empty from home_raw, fallback to trending charts
+            if not quick_picks:
+                try:
+                    charts = yt.get_charts(country='US')
+                    trending_items = charts.get('trending', {}).get('items', []) or charts.get('videos', {}).get('items', [])
+                    quick_picks = [format_song(s) for s in trending_items[:20]]
+                except:
+                    pass
+
+            # If fresh finds is empty, search "Fresh Finds" or "Trending"
+            if not fresh_finds:
+                try:
+                    ff_res = yt.search("Fresh Finds", filter="songs")
+                    fresh_finds = [format_song(s) for s in ff_res[:15]]
+                except:
+                    pass
+
+            # Fetch popular artists for "Artists For You"
+            popular_artists = []
+            try:
+                art_res = yt.search("popular artists", filter="artists")
+                popular_artists = [format_artist(a) for a in art_res[:12]]
+            except:
+                pass
+
+            # Fetch new releases
+            new_releases = []
+            try:
+                res_nr = yt._send_request('browse', {'browseId': 'FEmusic_new_releases_albums'})
+                contents_nr = res_nr.get('contents', {}).get('singleColumnBrowseResultsRenderer', {}).get('tabs', [{}])[0].get('tabRenderer', {}).get('content', {}).get('sectionListRenderer', {}).get('contents', [{}])[0].get('gridRenderer', {}).get('items', [])
+                for item_nr in contents_nr:
+                    renderer = item_nr.get("musicTwoRowItemRenderer", {})
+                    if not renderer: continue
+                    title_nr = renderer.get("title", {}).get("runs", [{"text": ""}])[0].get("text", "")
+                    b_id = renderer.get("navigationEndpoint", {}).get("browseEndpoint", {}).get("browseId", "")
+                    sub_runs = renderer.get("subtitle", {}).get("runs", [])
+                    art_name = sub_runs[2].get("text", "Artist") if len(sub_runs) >= 3 else (sub_runs[0].get("text", "Artist") if sub_runs else "Artist")
+                    thumbs_nr = renderer.get("thumbnailRenderer", {}).get("musicThumbnailRenderer", {}).get("thumbnail", {}).get("thumbnails", [])
+                    img_nr = thumbs_nr[-1]["url"] if thumbs_nr else ""
+                    new_releases.append({
+                        "id": b_id,
+                        "title": title_nr,
+                        "name": title_nr,
+                        "subtitle": art_name,
+                        "type": "album",
+                        "image": [{"quality": "500x500", "url": img_nr}]
+                    })
+            except:
+                pass
+
+            payload = {
+                "quick_picks": quick_picks,
+                "dancing_on_your_own": dancing_on_your_own,
+                "fresh_finds": fresh_finds,
+                "popular_artists": popular_artists,
+                "new_releases": new_releases,
+                "sections": sections
+            }
+            
+            with _home_cache_lock:
+                _home_cache["timestamp"] = now
+                _home_cache["data"] = payload
+
+            return jsonify({"success": True, "data": payload})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
+
+    @app.route('/api/similar_to')
+    def api_similar_to():
+        artist_id = request.args.get('artist_id', '')
+        artist_name = request.args.get('artist_name', '')
+        song_id = request.args.get('song_id', '')
+        results = []
+        try:
+            if song_id:
+                watch_pl = yt.get_watch_playlist(videoId=song_id, limit=15)
+                tracks = watch_pl.get("tracks", [])
+                for t in tracks:
+                    if t.get("videoId") != song_id:
+                        results.append(format_song(t))
+            elif artist_id:
+                artist_data = yt.get_artist(artist_id)
+                songs_data = artist_data.get("songs", {})
+                raw = []
+                if isinstance(songs_data, dict) and songs_data.get("browseId"):
+                    try:
+                        pl = yt.get_playlist(songs_data["browseId"])
+                        raw = pl.get("tracks", [])
+                    except:
+                        raw = songs_data.get("results", [])
+                elif isinstance(songs_data, dict):
+                    raw = songs_data.get("results", [])
+                elif isinstance(songs_data, list):
+                    raw = songs_data
+                results = [format_song(s) for s in raw[:15]]
+            elif artist_name:
+                search_res = yt.search(f"{artist_name} songs", filter="songs")
+                results = [format_song(s) for s in search_res[:15]]
+        except Exception as e:
+            print("similar_to error:", e)
+        return jsonify({"success": True, "data": results})
 
     @app.route('/api/artists')
     def api_artists():

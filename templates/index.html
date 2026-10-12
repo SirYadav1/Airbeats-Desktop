@@ -457,6 +457,7 @@
                 </div>
                 
                 <div class="user-profile">
+                    <a href="javascript:void(0)" onclick="window.toggleRightPanel()" id="topNowPlayingToggle" style="color: inherit; text-decoration: none; margin-right: 15px; display: none;" title="Toggle Now Playing Panel"><i class="fas fa-indent"></i></a>
                     <a href="#stats" style="color: inherit; text-decoration: none; margin-right: 15px;" title="Stats & Insights"><i class="fas fa-chart-pie"></i></a>
                     <a href="#settings/backup" style="color: inherit; text-decoration: none; margin-right: 15px;" title="Backup & Restore"><i class="fas fa-hdd"></i></a>
                     <a href="#settings/appearance" style="color: inherit; text-decoration: none;" title="Settings"><i class="fas fa-cog"></i></a>
@@ -479,10 +480,13 @@
                 </div>
 
                 <!-- RIGHT PANEL -->
-                <div class="right-panel">
+                <div class="right-panel" id="rightPanelContainer">
                     <div class="now-playing-large">
-                        <div class="np-header">
-                            <h3>Now Playing</h3>
+                        <div class="np-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0;">Now Playing</h3>
+                            <button onclick="window.toggleRightPanel(false)" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 13px; padding: 4px;" title="Hide Now Playing Panel">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                         <div class="np-image-container">
                             <img id="rightPanelImage" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="skeleton" alt="Now Playing">

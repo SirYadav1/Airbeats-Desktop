@@ -3649,3 +3649,30 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
+
+
+/* ==========================================================================
+   NOW PLAYING RIGHT PANEL AUTO-HIDE & FULL-WIDTH EXPANSION
+   ========================================================================== */
+body:not(.has-active-track) .right-panel,
+body.right-panel-collapsed .right-panel {
+    display: none !important;
+}
+
+body:not(.has-active-track) .main-content,
+body.right-panel-collapsed .main-content {
+    border-right: none !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.right-panel {
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: npSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes npSlideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}

@@ -5057,3 +5057,68 @@ window.showStatsToast = function(msg) {
     }, 2800);
 };
 
+
+
+/* ==========================================================================
+   DYNAMIC NOW PLAYING RIGHT-PANEL CONTROLLER
+   ========================================================================== */
+window.toggleRightPanel = function(show) {
+    const hasTrack = document.body.classList.contains('has-active-track');
+    if (show === undefined) {
+        if (!hasTrack) return;
+        document.body.classList.toggle('right-panel-collapsed');
+    } else if (show) {
+        document.body.classList.remove('right-panel-collapsed');
+    } else {
+        document.body.classList.add('right-panel-collapsed');
+    }
+};
+
+if (window.audio) {
+    audio.addEventListener('play', () => {
+        document.body.classList.add('has-active-track');
+        document.body.classList.remove('right-panel-collapsed');
+        const toggleBtn = document.getElementById('topNowPlayingToggle');
+        if (toggleBtn) toggleBtn.style.display = 'inline-block';
+    });
+}
+
+// Hook into song playback to reveal right-panel automatically
+(function() {
+    const origPlaySingle = window.playSingleTrack;
+    if (typeof origPlaySingle === 'function') {
+        window.playSingleTrack = async function() {
+            document.body.classList.add('has-active-track');
+            document.body.classList.remove('right-panel-collapsed');
+            const toggleBtn = document.getElementById('topNowPlayingToggle');
+            if (toggleBtn) toggleBtn.style.display = 'inline-block';
+            return origPlaySingle.apply(this, arguments);
+        };
+    }
+    const origPlayList = window.playList;
+    if (typeof origPlayList === 'function') {
+        window.playList = function() {
+            document.body.classList.add('has-active-track');
+            document.body.classList.remove('right-panel-collapsed');
+            const toggleBtn = document.getElementById('topNowPlayingToggle');
+            if (toggleBtn) toggleBtn.style.display = 'inline-block';
+            return origPlayList.apply(this, arguments);
+        };
+    }
+})();
+
+// Observe player title to detect active song
+document.addEventListener('DOMContentLoaded', () => {
+    const pTitle = document.getElementById('playerTitle');
+    if (pTitle) {
+        const obs = new MutationObserver(() => {
+            const txt = (pTitle.innerText || '').trim();
+            if (txt && txt.toLowerCase() !== 'no song') {
+                document.body.classList.add('has-active-track');
+                const toggleBtn = document.getElementById('topNowPlayingToggle');
+                if (toggleBtn) toggleBtn.style.display = 'inline-block';
+            }
+        });
+        obs.observe(pTitle, { childList: true, subtree: true, characterData: true });
+    }
+});

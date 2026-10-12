@@ -300,7 +300,7 @@ const router = async (forceRefresh = false) => {
     const scrollContainer = document.querySelector('.scroll-container');
     if (scrollContainer) scrollContainer.onscroll = null;
 
-    const noCacheRoutes = ['playlists', 'userplaylist', 'favorites', 'history', 'cached'];
+    const noCacheRoutes = ['playlists', 'userplaylist', 'favorites', 'history', 'cached', 'stats'];
     if (!forceRefresh && window.pageCache[cacheKey] && !noCacheRoutes.includes(route)) {
         routerView.innerHTML = window.pageCache[cacheKey];
         globalLoading.style.display = 'none';
@@ -310,7 +310,7 @@ const router = async (forceRefresh = false) => {
     routerView.innerHTML = '';
     globalLoading.style.display = 'flex';
 
-    const offlineAllowedRoutes = ['cached', 'favorites', 'history', 'playlists', 'userplaylist', 'settings'];
+    const offlineAllowedRoutes = ['cached', 'favorites', 'history', 'playlists', 'userplaylist', 'settings', 'stats'];
     if (!navigator.onLine && !offlineAllowedRoutes.includes(route)) {
         globalLoading.style.display = 'none';
         routerView.innerHTML = `<div style='display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; text-align: center; color: var(--text-secondary);'>
@@ -324,6 +324,7 @@ const router = async (forceRefresh = false) => {
 
     try {
         if (route === 'home') await renderHome();
+        else if (route === 'stats') await renderStats();
         else if (route === 'search') await renderSearch(decodeURIComponent(id || ''));
         else if (route === 'artist') await renderArtist(id);
         else if (route === 'album') await renderAlbum(id);
@@ -1842,6 +1843,12 @@ window.scrobbleCurrentTrack = function() {
     history.unshift(track);
     if (history.length > 30) history.pop();
     localStorage.setItem('playHistory', JSON.stringify(history));
+
+    // Record Granular Listening Event for Stats Engine
+    if (window.StatsEngine && window.StatsEngine.recordListenEvent) {
+        const listenedMs = (audio && audio.currentTime > 0) ? Math.round(audio.currentTime * 1000) : (track.duration ? track.duration * 1000 : 180000);
+        window.StatsEngine.recordListenEvent(track, listenedMs);
+    }
 }
 
 audio.addEventListener('play', () => {
@@ -1950,6 +1957,10 @@ audio.addEventListener('timeupdate', () => {
         window.electronAPI.updateDynamicIsland({ type: 'time', currentTime: audio.currentTime, duration: audio.duration });
     }
 
+    if (window.StatsEngine && window.StatsEngine.trackPlaytime) {
+        window.StatsEngine.trackPlaytime(audio.currentTime);
+    }
+
     if (!window.currentTrackScrobbled && audio.duration > 0) {
         // Scrobble if played for more than 30 seconds or 50% of the track
         if (audio.currentTime > 30 || audio.currentTime > (audio.duration * 0.5)) {
@@ -1960,6 +1971,13 @@ audio.addEventListener('timeupdate', () => {
 });
 
 audio.addEventListener('ended', () => {
+    // Record track completion in StatsEngine
+    const finishedTrack = window.getCurrentTrack ? window.getCurrentTrack() : null;
+    if (finishedTrack && window.StatsEngine && window.StatsEngine.recordListenEvent) {
+        const fullMs = (audio.duration && audio.duration > 0) ? Math.round(audio.duration * 1000) : 180000;
+        window.StatsEngine.recordListenEvent(finishedTrack, fullMs, true);
+    }
+
     // Cache the song if not already cached
     const currentSong = window.getCurrentTrack ? window.getCurrentTrack() : null;
     if (currentSong && window.cachedSongsList && !window.cachedSongsList.includes(currentSong.id)) {
@@ -2830,6 +2848,13 @@ window.handleBackupUpload = async function(input) {
                 localStorage.setItem('user_playlists', JSON.stringify(data.playlists));
                 restoredMsg.push(`${data.playlists.length} playlists`);
             }
+            // 4. Stats Events from Android Backup
+            if (data.statsEvents && Array.isArray(data.statsEvents) && data.statsEvents.length > 0) {
+                if (window.StatsEngine && window.StatsEngine.importEvents) {
+                    window.StatsEngine.importEvents(data.statsEvents);
+                }
+                restoredMsg.push(`${data.statsEvents.length} listening events`);
+            }
 
             const summary = restoredMsg.length > 0 ? restoredMsg.join(', ') : 'All library data';
             if (statusDiv) {
@@ -2861,7 +2886,12 @@ window.exportDesktopBackup = function() {
         user_playlists: JSON.parse(localStorage.getItem('user_playlists') || '[]'),
         recentlyPlayed: JSON.parse(localStorage.getItem('recentlyPlayed') || '[]'),
         saved_albums: JSON.parse(localStorage.getItem('saved_albums') || '{}'),
-        subscribedArtists: JSON.parse(localStorage.getItem('subscribedArtists') || '[]')
+        subscribedArtists: JSON.parse(localStorage.getItem('subscribedArtists') || '[]'),
+        statsEvents: JSON.parse(localStorage.getItem('airbeats_stats_events') || '[]'),
+        totalListenMs: parseInt(localStorage.getItem('airbeats_total_listen_ms') || '0', 10),
+        userName: localStorage.getItem('airbeats_user_name') || 'Airbeats Listener',
+        userAvatar: localStorage.getItem('airbeats_user_avatar') || '',
+        displayedBadge: localStorage.getItem('airbeats_displayed_badge') || ''
     };
 
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -3982,4 +4012,1048 @@ document.getElementById('cm-share').addEventListener('click', () => {
 });
 
 
+
+
+
+/* ==========================================================================
+   AIRBEATS STATS & INSIGHTS ENGINE (Desktop Edition - Modeled after Android)
+   ========================================================================== */
+window.StatsEngine = {
+    RANKS: [
+        { id: 'Echo', name: 'Echo', threshold: 1, desc: 'Whisper of sound', colors: ['#00F2FE', '#4FACFE'] },
+        { id: 'Pulse', name: 'Pulse', threshold: 5, desc: 'Rhythmic heartbeat', colors: ['#00FF87', '#60EFFF'] },
+        { id: 'Bronze', name: 'Bronze', threshold: 10, desc: 'Bronze listener', colors: ['#CA7345', '#EAA17C'] },
+        { id: 'Silver', name: 'Silver', threshold: 20, desc: 'Silver connoisseur', colors: ['#BDC3C7', '#E5E9F0'] },
+        { id: 'Gold', name: 'Gold', threshold: 35, desc: 'Golden audiophile', colors: ['#FFD700', '#FFA500'] },
+        { id: 'Platinum', name: 'Platinum', threshold: 50, desc: 'Platinum enthusiast', colors: ['#E5E9F0', '#B0C4DE'] },
+        { id: 'Diamond', name: 'Diamond', threshold: 75, desc: 'Diamond clarity', colors: ['#00F2FE', '#9B51E0'] },
+        { id: 'Elite', name: 'Elite', threshold: 100, desc: 'Elite listener', colors: ['#8E2DE2', '#4A00E0'] },
+        { id: 'Master', name: 'Master', threshold: 150, desc: 'Master curator', colors: ['#FF007F', '#FF5E62'] },
+        { id: 'Legend', name: 'Legend', threshold: 250, desc: 'Legendary streamer', colors: ['#F12711', '#F5AF19'] },
+        { id: 'Mythic', name: 'Mythic', threshold: 400, desc: 'Mythic resonance', colors: ['#0575E6', '#00F260'] },
+        { id: 'Immortal', name: 'Immortal', threshold: 600, desc: 'Immortal sound', colors: ['#1F1C2C', '#928DAB'] },
+        { id: 'Cosmic', name: 'Cosmic', threshold: 1000, desc: 'Cosmic voyager', colors: ['#1A1A2E', '#E94560'] },
+        { id: 'Nova', name: 'Nova', threshold: 1500, desc: 'Supernova explosion', colors: ['#FF416C', '#FF4B2B'] },
+        { id: 'Celestial', name: 'Celestial', threshold: 2500, desc: 'Celestial harmony', colors: ['#7F00FF', '#E100FF'] },
+        { id: 'Godlike', name: 'Godlike', threshold: 4000, desc: 'Godlike frequency', colors: ['#FF007F', '#FFD700', '#00F2FE'] },
+        { id: 'Universal', name: 'Universal', threshold: 6000, desc: 'Universal symphony', colors: ['#00C6FF', '#0072FF'] },
+        { id: 'Eternal', name: 'Eternal', threshold: 10000, desc: 'Eternal perpetuity', colors: ['#8A2387', '#E94057', '#F27121'] }
+    ],
+
+    lastTrackedSec: 0,
+    currentTrackId: null,
+
+    // Vector Emblem Generators for all 18 ranks
+    renderRankBadge: function(rankName, size = 32) {
+        const rank = this.RANKS.find(r => r.name.toLowerCase() === (rankName || '').toLowerCase()) || this.RANKS[0];
+        const colors = rank.colors;
+        const gradId = `rank_grad_${rank.name}_${Math.random().toString(36).substr(2, 6)}`;
+        
+        let emblemPath = '';
+        switch(rank.name) {
+            case 'Echo':
+                emblemPath = `<circle cx="50" cy="50" r="14" fill="url(#${gradId})"/><circle cx="50" cy="50" r="28" stroke="url(#${gradId})" stroke-width="4" fill="none" opacity="0.6"/>`;
+                break;
+            case 'Pulse':
+                emblemPath = `<path d="M 12 50 L 32 50 L 44 20 L 56 80 L 68 50 L 88 50" fill="none" stroke="url(#${gradId})" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
+                break;
+            case 'Bronze':
+                emblemPath = `<polygon points="50,15 82,38 70,78 30,78 18,38" fill="url(#${gradId})"/>`;
+                break;
+            case 'Silver':
+                emblemPath = `<path d="M 22 22 L 78 22 L 78 58 Q 78 86 50 94 Q 22 86 22 58 Z" fill="url(#${gradId})"/>`;
+                break;
+            case 'Gold':
+                emblemPath = `<polygon points="50,12 61,35 86,37 67,54 73,79 50,66 27,79 33,54 14,37 39,35" fill="url(#${gradId})"/>`;
+                break;
+            case 'Platinum':
+                emblemPath = `<polygon points="50,14 84,32 84,68 50,86 16,68 16,32" fill="url(#${gradId})"/><polygon points="50,26 72,38 72,62 50,74 28,62 28,38" fill="#0d1117" opacity="0.4"/>`;
+                break;
+            case 'Diamond':
+                emblemPath = `<polygon points="50,12 88,50 50,88 12,50" fill="url(#${gradId})"/><polygon points="50,24 76,50 50,76 24,50" fill="#ffffff" opacity="0.25"/>`;
+                break;
+            case 'Elite':
+                emblemPath = `<path d="M 16 80 L 16 35 L 36 55 L 50 20 L 64 55 L 84 35 L 84 80 Z" fill="url(#${gradId})"/>`;
+                break;
+            case 'Master':
+                emblemPath = `<circle cx="50" cy="50" r="32" stroke="url(#${gradId})" stroke-width="6" fill="none"/><circle cx="50" cy="50" r="16" fill="url(#${gradId})"/>`;
+                break;
+            case 'Legend':
+                emblemPath = `<circle cx="50" cy="50" r="30" fill="url(#${gradId})"/><polygon points="50,26 56,42 72,42 59,52 64,68 50,58 36,68 41,52 28,42 44,42" fill="#ffffff"/>`;
+                break;
+            case 'Mythic':
+                emblemPath = `<path d="M 30 50 C 30 32 46 32 50 50 C 54 68 70 68 70 50 C 70 32 54 32 50 50 C 46 68 30 68 30 50 Z" fill="none" stroke="url(#${gradId})" stroke-width="8" stroke-linecap="round"/>`;
+                break;
+            case 'Immortal':
+                emblemPath = `<polygon points="50,15 85,50 50,85 15,50" fill="url(#${gradId})"/><line x1="50" y1="18" x2="50" y2="82" stroke="#ffffff" stroke-width="5" opacity="0.85"/>`;
+                break;
+            case 'Cosmic':
+                emblemPath = `<circle cx="50" cy="50" r="18" fill="url(#${gradId})"/><ellipse cx="50" cy="50" rx="38" ry="14" fill="none" stroke="url(#${gradId})" stroke-width="5" transform="rotate(-30 50 50)"/>`;
+                break;
+            case 'Nova':
+                emblemPath = `<circle cx="50" cy="50" r="12" fill="#ffffff"/><path d="M 50 12 L 50 88 M 12 50 L 88 50 M 23 23 L 77 77 M 23 77 L 77 23" stroke="url(#${gradId})" stroke-width="5" stroke-linecap="round"/>`;
+                break;
+            case 'Celestial':
+                emblemPath = `<circle cx="50" cy="50" r="34" stroke="url(#${gradId})" stroke-width="5" fill="none"/><polygon points="50,22 72,50 50,78 28,50" fill="url(#${gradId})"/>`;
+                break;
+            case 'Godlike':
+                emblemPath = `<circle cx="50" cy="50" r="34" stroke="url(#${gradId})" stroke-width="6" fill="none"/><polygon points="50,22 76,70 24,70" fill="url(#${gradId})"/>`;
+                break;
+            case 'Universal':
+                emblemPath = `<circle cx="50" cy="50" r="35" stroke="url(#${gradId})" stroke-width="4" fill="none"/><ellipse cx="50" cy="50" rx="35" ry="16" fill="none" stroke="url(#${gradId})" stroke-width="3" transform="rotate(45 50 50)"/><ellipse cx="50" cy="50" rx="35" ry="16" fill="none" stroke="url(#${gradId})" stroke-width="3" transform="rotate(-45 50 50)"/>`;
+                break;
+            case 'Eternal':
+                emblemPath = `<circle cx="50" cy="50" r="36" stroke="url(#${gradId})" stroke-width="6" fill="none"/><path d="M 32 50 C 32 36 46 36 50 50 C 54 64 68 64 68 50 C 68 36 54 36 50 50 C 46 64 32 64 32 50 Z" fill="none" stroke="#FFD700" stroke-width="6"/>`;
+                break;
+            default:
+                emblemPath = `<circle cx="50" cy="50" r="22" fill="url(#${gradId})"/>`;
+        }
+
+        const colorStops = colors.map((c, i) => `<stop offset="${Math.round((i / (colors.length - 1 || 1)) * 100)}%" stop-color="${c}"/>`).join('');
+
+        return `
+            <svg width="${size}" height="${size}" viewBox="0 0 100 100" class="airbeats-rank-svg" style="vertical-align: middle; flex-shrink: 0;" title="${rank.name} Tier (${rank.threshold}h+)">
+                <defs>
+                    <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
+                        ${colorStops}
+                    </linearGradient>
+                </defs>
+                <circle cx="50" cy="50" r="46" fill="#0d1117" stroke="url(#${gradId})" stroke-width="4"/>
+                ${emblemPath}
+            </svg>
+        `;
+    },
+
+    // Seed events from playHistory / favorites if empty
+    getEvents: function() {
+        let events = [];
+        try {
+            events = JSON.parse(localStorage.getItem('airbeats_stats_events') || '[]');
+        } catch(e) { events = []; }
+
+        if (!events || events.length === 0) {
+            // Seed from playHistory
+            const hist = JSON.parse(localStorage.getItem('playHistory') || '[]');
+            const favs = JSON.parse(localStorage.getItem('favoriteSongs') || '[]');
+            const seedTracks = [...hist, ...favs];
+            if (seedTracks.length > 0) {
+                events = [];
+                const now = Date.now();
+                seedTracks.forEach((t, i) => {
+                    if (!t || !t.id) return;
+                    const dur = t.duration ? parseInt(t.duration, 10) : 210;
+                    const playCount = Math.max(1, Math.floor(Math.random() * 5) + 1);
+                    for (let c = 0; c < playCount; c++) {
+                        events.push({
+                            id: `seed_${t.id}_${c}`,
+                            songId: t.id,
+                            title: t.title || t.name || 'Unknown Track',
+                            artist: (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].name) || t.artist || 'Unknown Artist',
+                            artistId: (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].id) || t.artistIds || '',
+                            album: (t.album && (t.album.title || t.album.name || t.album)) || '',
+                            albumId: (t.album && t.album.id) || '',
+                            image: (t.image && (t.image[2] ? t.image[2].url : (t.image[1] ? t.image[1].url : t.image))) || 'https://ui-avatars.com/api/?name=Song&background=333&color=fff',
+                            duration: dur,
+                            timeListenedMs: dur * 1000,
+                            timestamp: new Date(now - (i * 3600000 * 6) - (c * 86400000)).toISOString()
+                        });
+                    }
+                });
+                try {
+                    localStorage.setItem('airbeats_stats_events', JSON.stringify(events));
+                    const totalMs = events.reduce((sum, e) => sum + (e.timeListenedMs || 0), 0);
+                    localStorage.setItem('airbeats_total_listen_ms', totalMs.toString());
+                } catch(e) {}
+            }
+        }
+        return events || [];
+    },
+
+    // Record an individual play event
+    recordListenEvent: function(track, listenedMs, isComplete = false) {
+        if (!track || !track.id) return;
+        const events = this.getEvents();
+        const dur = track.duration ? parseInt(track.duration, 10) : 210;
+        const validMs = Math.max(15000, parseInt(listenedMs, 10) || (dur * 1000));
+        
+        const newEvent = {
+            id: `ev_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            songId: track.id,
+            title: track.title || track.name || 'Unknown Track',
+            artist: (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].name) || track.artist || 'Unknown Artist',
+            artistId: (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].id) || track.artistIds || '',
+            album: (track.album && (track.album.title || track.album.name || track.album)) || '',
+            albumId: (track.album && track.album.id) || '',
+            image: (track.image && (track.image[2] ? track.image[2].url : (track.image[1] ? track.image[1].url : track.image))) || 'https://ui-avatars.com/api/?name=Song&background=333&color=fff',
+            duration: dur,
+            timeListenedMs: validMs,
+            timestamp: new Date().toISOString()
+        };
+
+        events.unshift(newEvent);
+        if (events.length > 5000) events.pop();
+        
+        try {
+            localStorage.setItem('airbeats_stats_events', JSON.stringify(events));
+            const currentTotal = parseInt(localStorage.getItem('airbeats_total_listen_ms') || '0', 10);
+            localStorage.setItem('airbeats_total_listen_ms', (currentTotal + validMs).toString());
+        } catch(e) {}
+    },
+
+    // Continuous playtime accumulation
+    trackPlaytime: function(currentTime) {
+        const curSec = Math.floor(currentTime);
+        const curTrack = window.getCurrentTrack ? window.getCurrentTrack() : null;
+        if (!curTrack) return;
+        if (this.currentTrackId !== curTrack.id) {
+            this.currentTrackId = curTrack.id;
+            this.lastTrackedSec = curSec;
+            return;
+        }
+        if (curSec > this.lastTrackedSec) {
+            const diffSec = curSec - this.lastTrackedSec;
+            if (diffSec > 0 && diffSec < 10) {
+                const addMs = diffSec * 1000;
+                const currentTotal = parseInt(localStorage.getItem('airbeats_total_listen_ms') || '0', 10);
+                localStorage.setItem('airbeats_total_listen_ms', (currentTotal + addMs).toString());
+            }
+            this.lastTrackedSec = curSec;
+        }
+    },
+
+    importEvents: function(importedEvents) {
+        if (!Array.isArray(importedEvents) || importedEvents.length === 0) return;
+        const currentEvents = this.getEvents();
+        const existingIds = new Set(currentEvents.map(e => e.id || `${e.songId}_${e.timestamp}`));
+        
+        let addedCount = 0;
+        importedEvents.forEach(ev => {
+            const key = ev.id || `${ev.songId}_${ev.timestamp}`;
+            if (!existingIds.has(key)) {
+                existingIds.add(key);
+                currentEvents.push(ev);
+                addedCount++;
+            }
+        });
+
+        currentEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        try {
+            localStorage.setItem('airbeats_stats_events', JSON.stringify(currentEvents.slice(0, 10000)));
+            const newTotalMs = currentEvents.reduce((sum, e) => sum + (e.timeListenedMs || 0), 0);
+            localStorage.setItem('airbeats_total_listen_ms', newTotalMs.toString());
+        } catch(e) {}
+    },
+
+    getProfile: function() {
+        return {
+            name: localStorage.getItem('airbeats_user_name') || 'Airbeats Listener',
+            avatar: localStorage.getItem('airbeats_user_avatar') || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+            displayedBadge: localStorage.getItem('airbeats_displayed_badge') || null
+        };
+    },
+
+    saveProfile: function(name, avatar, displayedBadge) {
+        if (name) localStorage.setItem('airbeats_user_name', name.trim());
+        if (avatar) localStorage.setItem('airbeats_user_avatar', avatar.trim());
+        if (displayedBadge !== undefined) {
+            if (displayedBadge) localStorage.setItem('airbeats_displayed_badge', displayedBadge);
+            else localStorage.removeItem('airbeats_displayed_badge');
+        }
+    },
+
+    getTotalHours: function() {
+        const events = this.getEvents();
+        const totalMs = parseInt(localStorage.getItem('airbeats_total_listen_ms') || '0', 10) || events.reduce((sum, e) => sum + (e.timeListenedMs || 0), 0);
+        return totalMs / 3600000.0;
+    },
+
+    getCurrentRank: function(hours) {
+        const h = hours !== undefined ? hours : this.getTotalHours();
+        for (let i = this.RANKS.length - 1; i >= 0; i--) {
+            if (h >= this.RANKS[i].threshold) {
+                return this.RANKS[i];
+            }
+        }
+        return this.RANKS[0];
+    },
+
+    getNextRank: function(currentRank) {
+        const idx = this.RANKS.findIndex(r => r.name === currentRank.name);
+        if (idx >= 0 && idx < this.RANKS.length - 1) {
+            return this.RANKS[idx + 1];
+        }
+        return null;
+    },
+
+    // Filter events by period
+    filterEvents: function(mode, indexChip, allEvents) {
+        const events = allEvents || this.getEvents();
+        const now = new Date();
+
+        if (mode === 'continuous') {
+            let cutoff = 0;
+            switch(indexChip) {
+                case 0: cutoff = 7 * 86400000; break;     // 1W
+                case 1: cutoff = 30 * 86400000; break;    // 1M
+                case 2: cutoff = 90 * 86400000; break;    // 3M
+                case 3: cutoff = 180 * 86400000; break;   // 6M
+                case 4: cutoff = 365 * 86400000; break;   // 1Y
+                case 5: cutoff = 0; break;                // All Time
+                default: cutoff = 0;
+            }
+            if (cutoff === 0) return events;
+            const threshold = new Date(now.getTime() - cutoff);
+            return events.filter(e => new Date(e.timestamp) >= threshold);
+        } else if (mode === 'weeks') {
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - now.getDay() - (indexChip * 7));
+            startOfWeek.setHours(0, 0, 0, 0);
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 7);
+            return events.filter(e => {
+                const d = new Date(e.timestamp);
+                return d >= startOfWeek && d < endOfWeek;
+            });
+        } else if (mode === 'months') {
+            const targetDate = new Date(now.getFullYear(), now.getMonth() - indexChip, 1);
+            const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+            const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1);
+            return events.filter(e => {
+                const d = new Date(e.timestamp);
+                return d >= startOfMonth && d < endOfMonth;
+            });
+        } else if (mode === 'years') {
+            const targetYear = now.getFullYear() - indexChip;
+            const startOfYear = new Date(targetYear, 0, 1);
+            const endOfYear = new Date(targetYear + 1, 0, 1);
+            return events.filter(e => {
+                const d = new Date(e.timestamp);
+                return d >= startOfYear && d < endOfYear;
+            });
+        }
+        return events;
+    },
+
+    // Aggregate filtered events into high-level metrics
+    aggregate: function(filteredEvents) {
+        const events = filteredEvents || [];
+        let totalMs = 0;
+        const songMap = new Map();
+        const artistMap = new Map();
+        const albumMap = new Map();
+        const hourDistribution = new Array(24).fill(0);
+
+        events.forEach(ev => {
+            const ms = ev.timeListenedMs || (ev.duration ? ev.duration * 1000 : 180000);
+            totalMs += ms;
+
+            const evDate = new Date(ev.timestamp);
+            if (!isNaN(evDate)) {
+                hourDistribution[evDate.getHours()]++;
+            }
+
+            // Songs
+            const songId = ev.songId || ev.id;
+            if (songId) {
+                if (!songMap.has(songId)) {
+                    songMap.set(songId, {
+                        id: songId,
+                        title: ev.title || 'Unknown Track',
+                        artist: ev.artist || 'Unknown Artist',
+                        artistId: ev.artistId || '',
+                        album: ev.album || '',
+                        image: ev.image || 'https://ui-avatars.com/api/?name=Song&background=333&color=fff',
+                        playCount: 0,
+                        totalListenMs: 0
+                    });
+                }
+                const s = songMap.get(songId);
+                s.playCount++;
+                s.totalListenMs += ms;
+            }
+
+            // Artists
+            const artistName = ev.artist || 'Unknown Artist';
+            if (artistName && artistName !== 'Unknown Artist') {
+                if (!artistMap.has(artistName)) {
+                    artistMap.set(artistName, {
+                        id: ev.artistId || artistName,
+                        name: artistName,
+                        image: ev.image || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(artistName),
+                        playCount: 0,
+                        totalListenMs: 0
+                    });
+                }
+                const a = artistMap.get(artistName);
+                a.playCount++;
+                a.totalListenMs += ms;
+            }
+
+            // Albums
+            const albumName = ev.album || '';
+            if (albumName) {
+                if (!albumMap.has(albumName)) {
+                    albumMap.set(albumName, {
+                        id: ev.albumId || albumName,
+                        title: albumName,
+                        artist: ev.artist || '',
+                        image: ev.image || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(albumName),
+                        playCount: 0,
+                        totalListenMs: 0
+                    });
+                }
+                const alb = albumMap.get(albumName);
+                alb.playCount++;
+                alb.totalListenMs += ms;
+            }
+        });
+
+        const topSongs = Array.from(songMap.values()).sort((a, b) => b.playCount - a.playCount || b.totalListenMs - a.totalListenMs);
+        const topArtists = Array.from(artistMap.values()).sort((a, b) => b.playCount - a.playCount || b.totalListenMs - a.totalListenMs);
+        const topAlbums = Array.from(albumMap.values()).sort((a, b) => b.playCount - a.playCount || b.totalListenMs - a.totalListenMs);
+
+        // Calculate Listener Persona based on habits
+        const nightPlays = hourDistribution.slice(21, 24).reduce((a, b) => a + b, 0) + hourDistribution.slice(0, 5).reduce((a, b) => a + b, 0);
+        const totalHourPlays = hourDistribution.reduce((a, b) => a + b, 0) || 1;
+        let persona = 'Melody Connoisseur';
+        if (nightPlays / totalHourPlays > 0.4) persona = 'Night Owl Audiophile';
+        else if (topSongs.length > 50) persona = 'Discovery Pioneer';
+        else if (topArtists.length > 0 && topArtists[0].playCount > 20) persona = `${topArtists[0].name} Devotee`;
+        else if (totalMs > 100 * 3600000) persona = 'Marathon Streamer';
+
+        return {
+            totalListenMs: totalMs,
+            totalHours: (totalMs / 3600000.0),
+            uniqueSongs: songMap.size,
+            totalScrobbles: events.length,
+            topSongs: topSongs,
+            topArtists: topArtists,
+            topAlbums: topAlbums,
+            persona: persona,
+            hourDistribution: hourDistribution
+        };
+    },
+
+    formatTime: function(milliseconds) {
+        const totalMinutes = Math.floor(milliseconds / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        if (hours === 0) return `${minutes}m`;
+        return `${hours}h ${minutes}m`;
+    }
+};
+
+/* ==========================================================================
+   RENDER STATS SCREEN (#stats)
+   ========================================================================== */
+window.currentStatsMode = 'continuous';
+window.currentStatsChipIndex = 5; // Default: All Time
+
+async function renderStats() {
+    const events = window.StatsEngine.getEvents();
+    const profile = window.StatsEngine.getProfile();
+    const totalAllTimeHours = window.StatsEngine.getTotalHours();
+    const realRank = window.StatsEngine.getCurrentRank(totalAllTimeHours);
+    const displayedRankObj = profile.displayedBadge 
+        ? (window.StatsEngine.RANKS.find(r => r.name.toLowerCase() === profile.displayedBadge.toLowerCase()) || realRank)
+        : realRank;
+    const nextRank = window.StatsEngine.getNextRank(realRank);
+
+    // Calculate next rank progress
+    let progressPercent = 100;
+    let hoursRemaining = 0;
+    if (nextRank) {
+        const curThreshold = realRank.threshold;
+        const nextThreshold = nextRank.threshold;
+        const progressInTier = Math.max(0, totalAllTimeHours - curThreshold);
+        const tierSpan = nextThreshold - curThreshold;
+        progressPercent = Math.min(100, Math.max(0, Math.round((progressInTier / tierSpan) * 100)));
+        hoursRemaining = Math.max(0, (nextThreshold - totalAllTimeHours)).toFixed(1);
+    }
+
+    // Filter events for the current active period
+    const filteredEvents = window.StatsEngine.filterEvents(window.currentStatsMode, window.currentStatsChipIndex, events);
+    const agg = window.StatsEngine.aggregate(filteredEvents);
+
+    // Dynamic Period Chips
+    const continuousChips = [
+        { label: '1 Week', val: 0 },
+        { label: '1 Month', val: 1 },
+        { label: '3 Months', val: 2 },
+        { label: '6 Months', val: 3 },
+        { label: '1 Year', val: 4 },
+        { label: 'All Time', val: 5 }
+    ];
+
+    let dynamicChips = [];
+    if (window.currentStatsMode === 'continuous') {
+        dynamicChips = continuousChips;
+    } else if (window.currentStatsMode === 'weeks') {
+        dynamicChips = [
+            { label: 'This Week', val: 0 },
+            { label: 'Last Week', val: 1 },
+            { label: '2 Weeks Ago', val: 2 },
+            { label: '3 Weeks Ago', val: 3 }
+        ];
+    } else if (window.currentStatsMode === 'months') {
+        const mNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const curM = new Date().getMonth();
+        const curY = new Date().getFullYear();
+        dynamicChips = [0, 1, 2, 3, 4, 5].map(idx => {
+            const d = new Date(curY, curM - idx, 1);
+            return { label: `${mNames[d.getMonth()]} ${d.getFullYear()}`, val: idx };
+        });
+    } else if (window.currentStatsMode === 'years') {
+        const curY = new Date().getFullYear();
+        dynamicChips = [0, 1, 2].map(idx => ({ label: `${curY - idx}`, val: idx }));
+    }
+
+    // Top 5 Songs for Bar Chart
+    const top5 = agg.topSongs.slice(0, 5);
+    const maxPlays = top5.length > 0 ? top5[0].playCount : 1;
+
+    routerView.innerHTML = `
+        <div class="stats-container">
+            <!-- 1. PROFILE & QUICK ACTION HERO -->
+            <div class="stats-profile-hero">
+                <div class="stats-profile-left">
+                    <div class="stats-avatar-wrap" onclick="window.openProfileCustomizerModal()" title="Change Avatar & Badge">
+                        <img src="${profile.avatar}" class="stats-avatar-img" alt="${profile.name}">
+                        <div class="stats-avatar-edit-badge"><i class="fas fa-camera"></i></div>
+                    </div>
+                    <div class="stats-user-meta">
+                        <div class="stats-user-name-row">
+                            <h1 class="stats-user-name">${profile.name}</h1>
+                            <button class="stats-edit-name-btn" onclick="window.openProfileCustomizerModal()" title="Edit Name"><i class="fas fa-pen"></i></button>
+                        </div>
+                        <div class="stats-badge-tag" onclick="window.openProfileCustomizerModal()" title="Choose Displayed Badge">
+                            ${window.StatsEngine.renderRankBadge(displayedRankObj.name, 20)}
+                            <span>${displayedRankObj.name} Tier</span>
+                            <i class="fas fa-chevron-right" style="font-size: 10px; opacity: 0.6;"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-profile-actions">
+                    <button class="stats-action-btn stats-action-btn-insight" onclick="window.openInsightModal()">
+                        <i class="fas fa-sparkles"></i> AirBeats Insight
+                    </button>
+                    <button class="stats-action-btn" onclick="window.openProfileCustomizerModal()">
+                        <i class="fas fa-user-gear"></i> Badges & Profile
+                    </button>
+                    <button class="stats-action-btn" onclick="window.shuffleMostPlayedStats()">
+                        <i class="fas fa-random"></i> Shuffle Most Played
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. RANK STATUS & LEVEL PROGRESS BANNER -->
+            <div class="stats-rank-banner">
+                <div class="stats-rank-emblem-wrap">
+                    ${window.StatsEngine.renderRankBadge(realRank.name, 68)}
+                </div>
+                <div class="stats-rank-info">
+                    <div class="stats-rank-header">
+                        <div class="stats-rank-title">
+                            ${realRank.name.toUpperCase()} TIER
+                            <span style="font-size: 12px; font-weight: 600; color: var(--accent); background: rgba(29, 185, 84, 0.12); padding: 3px 10px; border-radius: 50px;">
+                                ${realRank.desc}
+                            </span>
+                        </div>
+                        <div class="stats-rank-hours-label">
+                            <b>${totalAllTimeHours.toFixed(1)}h</b> listened all-time
+                        </div>
+                    </div>
+                    <div class="stats-progress-track">
+                        <div class="stats-progress-fill" style="width: ${progressPercent}%;"></div>
+                    </div>
+                    <div class="stats-rank-footer">
+                        <span>Progress: <b>${progressPercent}%</b> towards ${nextRank ? nextRank.name : 'Max Tier'}</span>
+                        <span>${nextRank ? `<b>${hoursRemaining}h</b> remaining until ${nextRank.name} (${nextRank.threshold}h)` : 'Maximum Tier Reached!'}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. PERIOD SELECTOR TABS -->
+            <div class="stats-filter-section">
+                <div class="stats-mode-tabs">
+                    <button class="stats-mode-tab ${window.currentStatsMode === 'continuous' ? 'active' : ''}" onclick="window.switchStatsMode('continuous')">Continuous</button>
+                    <button class="stats-mode-tab ${window.currentStatsMode === 'weeks' ? 'active' : ''}" onclick="window.switchStatsMode('weeks')">Weeks</button>
+                    <button class="stats-mode-tab ${window.currentStatsMode === 'months' ? 'active' : ''}" onclick="window.switchStatsMode('months')">Months</button>
+                    <button class="stats-mode-tab ${window.currentStatsMode === 'years' ? 'active' : ''}" onclick="window.switchStatsMode('years')">Years</button>
+                </div>
+
+                <div class="stats-chips-row">
+                    ${dynamicChips.map(c => `
+                        <button class="stats-chip ${window.currentStatsChipIndex === c.val ? 'active' : ''}" onclick="window.setStatsChipIndex(${c.val})">
+                            ${c.label}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- 4. KEY SUMMARY METRICS (4 CARDS) -->
+            <div class="stats-metrics-grid">
+                <div class="stats-stat-card">
+                    <div class="stats-stat-card-header">
+                        <span class="stats-stat-label">Total Time</span>
+                        <i class="fas fa-clock stats-stat-icon"></i>
+                    </div>
+                    <div class="stats-stat-val">${window.StatsEngine.formatTime(agg.totalListenMs)}</div>
+                    <div class="stats-stat-sub">Across selected period</div>
+                </div>
+
+                <div class="stats-stat-card">
+                    <div class="stats-stat-card-header">
+                        <span class="stats-stat-label">Unique Songs</span>
+                        <i class="fas fa-music stats-stat-icon"></i>
+                    </div>
+                    <div class="stats-stat-val">${agg.uniqueSongs}</div>
+                    <div class="stats-stat-sub">Distinct tracks played</div>
+                </div>
+
+                <div class="stats-stat-card">
+                    <div class="stats-stat-card-header">
+                        <span class="stats-stat-label">Total Scrobbles</span>
+                        <i class="fas fa-play-circle stats-stat-icon"></i>
+                    </div>
+                    <div class="stats-stat-val">${agg.totalScrobbles}</div>
+                    <div class="stats-stat-sub">Completed listening events</div>
+                </div>
+
+                <div class="stats-stat-card">
+                    <div class="stats-stat-card-header">
+                        <span class="stats-stat-label">Top Artist</span>
+                        <i class="fas fa-user-astronaut stats-stat-icon"></i>
+                    </div>
+                    <div class="stats-stat-val" style="font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${agg.topArtists.length > 0 ? agg.topArtists[0].name : 'None yet'}
+                    </div>
+                    <div class="stats-stat-sub">${agg.topArtists.length > 0 ? `${agg.topArtists[0].playCount} plays (${window.StatsEngine.formatTime(agg.topArtists[0].totalListenMs)})` : 'Keep listening'}</div>
+                </div>
+            </div>
+
+            <!-- 5. TOP 5 SONGS BAR CHART -->
+            ${top5.length > 0 ? `
+            <div class="stats-chart-card">
+                <div class="stats-chart-title">
+                    <span>Top 5 Songs</span>
+                    <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Ranked by play count</span>
+                </div>
+                <div class="stats-chart-list">
+                    ${top5.map((s, idx) => {
+                        const fillPercent = Math.max(10, Math.round((s.playCount / maxPlays) * 100));
+                        return `
+                        <div class="stats-chart-row">
+                            <span class="stats-chart-rank" style="${idx === 0 ? 'color: #ffd700;' : (idx === 1 ? 'color: #c0c0c0;' : (idx === 2 ? 'color: #cd7f32;' : ''))}">#${idx + 1}</span>
+                            <img src="${s.image}" class="stats-chart-thumb" alt="${s.title}">
+                            <div class="stats-chart-info">
+                                <div class="stats-chart-song-title" title="${s.title}">${s.title}</div>
+                                <div class="stats-chart-song-artist" title="${s.artist}">${s.artist}</div>
+                            </div>
+                            <div class="stats-bar-track">
+                                <div class="stats-bar-fill" style="width: ${fillPercent}%;"></div>
+                            </div>
+                            <span class="stats-chart-count-pill">${s.playCount} plays</span>
+                            <button class="stats-chart-play-btn" onclick="window.playSingleTrack('${s.id}')" title="Play Now"><i class="fas fa-play"></i></button>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            ` : ''}
+
+            <!-- 6. MOST PLAYED SONGS SHELF -->
+            <div class="stats-shelf-section">
+                <div class="stats-shelf-header">
+                    <h3 class="stats-shelf-title">Most Played Songs (${agg.topSongs.length})</h3>
+                    ${agg.topSongs.length > 0 ? `
+                        <button class="stats-action-btn" style="padding: 7px 18px; font-size: 12px;" onclick="window.shuffleMostPlayedStats()">
+                            <i class="fas fa-random"></i> Shuffle All
+                        </button>
+                    ` : ''}
+                </div>
+                ${agg.topSongs.length > 0 ? `
+                    <div class="stats-shelf-grid">
+                        ${agg.topSongs.slice(0, 12).map((s, idx) => `
+                            <div class="stats-item-card" onclick="window.playSingleTrack('${s.id}')">
+                                <div class="stats-item-thumb-wrap">
+                                    <img src="${s.image}" class="stats-item-thumb" alt="${s.title}">
+                                    <div class="stats-item-play-overlay">
+                                        <div class="stats-item-play-btn"><i class="fas fa-play"></i></div>
+                                    </div>
+                                </div>
+                                <div class="stats-item-title" title="${s.title}">${idx + 1}. ${s.title}</div>
+                                <div class="stats-item-sub" title="${s.artist}">${s.artist}</div>
+                                <span class="stats-item-count-badge">${s.playCount} plays • ${window.StatsEngine.formatTime(s.totalListenMs)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <div style="color: var(--text-secondary); padding: 30px 0; text-align: center;">No song records in this period. Start streaming tracks to see your stats!</div>
+                `}
+            </div>
+
+            <!-- 7. MOST PLAYED ARTISTS SHELF -->
+            <div class="stats-shelf-section">
+                <div class="stats-shelf-header">
+                    <h3 class="stats-shelf-title">Most Played Artists (${agg.topArtists.length})</h3>
+                </div>
+                ${agg.topArtists.length > 0 ? `
+                    <div class="stats-shelf-grid">
+                        ${agg.topArtists.slice(0, 12).map((a, idx) => `
+                            <div class="stats-item-card" onclick="location.hash='#artist/${a.id}'">
+                                <div class="stats-item-thumb-wrap round">
+                                    <img src="${a.image}" class="stats-item-thumb" alt="${a.name}">
+                                </div>
+                                <div class="stats-item-title" style="text-align: center;">${idx + 1}. ${a.name}</div>
+                                <div style="text-align: center;">
+                                    <span class="stats-item-count-badge">${a.playCount} plays • ${window.StatsEngine.formatTime(a.totalListenMs)}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <div style="color: var(--text-secondary); padding: 20px 0; text-align: center;">No artist data in this period.</div>
+                `}
+            </div>
+
+            <!-- 8. MOST PLAYED ALBUMS SHELF -->
+            <div class="stats-shelf-section">
+                <div class="stats-shelf-header">
+                    <h3 class="stats-shelf-title">Most Played Albums (${agg.topAlbums.length})</h3>
+                </div>
+                ${agg.topAlbums.length > 0 ? `
+                    <div class="stats-shelf-grid">
+                        ${agg.topAlbums.slice(0, 12).map((alb, idx) => `
+                            <div class="stats-item-card" onclick="location.hash='#album/${alb.id}'">
+                                <div class="stats-item-thumb-wrap">
+                                    <img src="${alb.image}" class="stats-item-thumb" alt="${alb.title}">
+                                </div>
+                                <div class="stats-item-title" title="${alb.title}">${idx + 1}. ${alb.title}</div>
+                                <div class="stats-item-sub" title="${alb.artist}">${alb.artist}</div>
+                                <span class="stats-item-count-badge">${alb.playCount} plays • ${window.StatsEngine.formatTime(alb.totalListenMs)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <div style="color: var(--text-secondary); padding: 20px 0; text-align: center;">No album plays recorded in this period.</div>
+                `}
+            </div>
+        </div>
+
+        <div id="stats-toast" class="stats-toast"></div>
+    `;
+
+    globalLoading.style.display = 'none';
+}
+
+window.switchStatsMode = function(mode) {
+    window.currentStatsMode = mode;
+    window.currentStatsChipIndex = 0;
+    renderStats();
+};
+
+window.setStatsChipIndex = function(idx) {
+    window.currentStatsChipIndex = idx;
+    renderStats();
+};
+
+window.shuffleMostPlayedStats = function() {
+    const events = window.StatsEngine.getEvents();
+    const agg = window.StatsEngine.aggregate(events);
+    if (!agg.topSongs || agg.topSongs.length === 0) {
+        window.showStatsToast("No played songs to shuffle!");
+        return;
+    }
+    const shuffled = [...agg.topSongs].sort(() => Math.random() - 0.5);
+    window.playList(shuffled, 0);
+    window.showStatsToast(`Shuffling ${shuffled.length} top played songs!`);
+};
+
+/* ==========================================================================
+   AIRBEATS INSIGHT MODAL ("Discover Your Musical Year / Journey")
+   ========================================================================== */
+window.openInsightModal = function() {
+    const events = window.StatsEngine.getEvents();
+    const agg = window.StatsEngine.aggregate(events);
+    const profile = window.StatsEngine.getProfile();
+    const currentYear = new Date().getFullYear();
+    const topSong = agg.topSongs[0] || null;
+    const topArtist = agg.topArtists[0] || null;
+    const totalMins = Math.round(agg.totalListenMs / 60000);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'insight-modal-overlay';
+    overlay.id = 'airbeats-insight-modal';
+    overlay.onclick = (e) => {
+        if (e.target === overlay) window.closeInsightModal();
+    };
+
+    overlay.innerHTML = `
+        <div class="insight-modal-card">
+            <div class="insight-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fas fa-sparkles" style="font-size: 24px; color: var(--accent);"></i>
+                    <div>
+                        <h2 style="margin: 0; font-size: 22px; font-weight: 800; color: #fff;">AirBeats Insight</h2>
+                        <div style="font-size: 13px; color: var(--text-secondary);">Your personalized musical journey</div>
+                    </div>
+                </div>
+                <button onclick="window.closeInsightModal()" style="background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- HERO RECAP BANNER -->
+            <div class="insight-hero-banner">
+                <div class="insight-persona-pill">
+                    <i class="fas fa-compact-disc"></i> ${agg.persona}
+                </div>
+                <h1 style="font-size: 32px; font-weight: 900; margin: 0 0 4px 0; letter-spacing: -0.5px;">Your Musical Year</h1>
+                <div style="font-size: 46px; font-weight: 900; line-height: 1.1; margin-bottom: 8px;">${currentYear}</div>
+                <div style="font-size: 14px; opacity: 0.9;">${profile.name}'s streaming universe powered by Airbeats</div>
+            </div>
+
+            <!-- KEY HIGHLIGHTS -->
+            <div class="insight-highlights-grid">
+                <div class="insight-mini-card">
+                    <img src="${topSong ? topSong.image : 'https://ui-avatars.com/api/?name=Song'}" class="insight-mini-thumb" alt="Top Track">
+                    <div style="overflow: hidden;">
+                        <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;">Top Track</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${topSong ? topSong.title : 'None yet'}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            ${topSong ? `${topSong.playCount} plays` : 'Keep streaming'}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="insight-mini-card">
+                    <img src="${topArtist ? topArtist.image : 'https://ui-avatars.com/api/?name=Artist'}" class="insight-mini-thumb round" alt="Top Artist">
+                    <div style="overflow: hidden;">
+                        <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;">Top Artist</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            ${topArtist ? topArtist.name : 'None yet'}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            ${topArtist ? `${topArtist.playCount} plays` : 'Keep streaming'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4 FEATURE METRIC BOXES -->
+            <div class="insight-feature-icons">
+                <div class="insight-feature-box">
+                    <span class="insight-feature-emoji">⏱️</span>
+                    <div style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 2px;">${totalMins.toLocaleString()}</div>
+                    <div class="insight-feature-label">Minutes<br>Listened</div>
+                </div>
+                <div class="insight-feature-box">
+                    <span class="insight-feature-emoji">🎵</span>
+                    <div style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 2px;">${agg.uniqueSongs}</div>
+                    <div class="insight-feature-label">Tracks<br>Explored</div>
+                </div>
+                <div class="insight-feature-box">
+                    <span class="insight-feature-emoji">🎤</span>
+                    <div style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 2px;">${agg.topArtists.length}</div>
+                    <div class="insight-feature-label">Artists<br>Discovered</div>
+                </div>
+                <div class="insight-feature-box">
+                    <span class="insight-feature-emoji">🏆</span>
+                    <div style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 2px;">${agg.totalScrobbles}</div>
+                    <div class="insight-feature-label">Total<br>Scrobbles</div>
+                </div>
+            </div>
+
+            <!-- ACTIONS -->
+            <div class="insight-actions">
+                <button class="stats-action-btn stats-action-btn-insight" style="flex: 1; justify-content: center;" onclick="window.copyInsightReport()">
+                    <i class="fas fa-share-nodes"></i> Share & Copy Summary
+                </button>
+                <button class="stats-action-btn" style="flex: 1; justify-content: center;" onclick="window.shuffleMostPlayedStats(); window.closeInsightModal();">
+                    <i class="fas fa-play"></i> Play Insight Queue
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+};
+
+window.closeInsightModal = function() {
+    const modal = document.getElementById('airbeats-insight-modal');
+    if (modal) modal.remove();
+};
+
+window.copyInsightReport = function() {
+    const events = window.StatsEngine.getEvents();
+    const agg = window.StatsEngine.aggregate(events);
+    const profile = window.StatsEngine.getProfile();
+    const topSong = agg.topSongs[0] ? agg.topSongs[0].title + ' by ' + agg.topSongs[0].artist : 'N/A';
+    const topArtist = agg.topArtists[0] ? agg.topArtists[0].name : 'N/A';
+
+    const text = `🎧 My AirBeats Insight Summary:
+👤 Listener: ${profile.name}
+✨ Persona: ${agg.persona}
+⏱️ Listening Time: ${window.StatsEngine.formatTime(agg.totalListenMs)}
+🎵 Top Song: ${topSong}
+🎤 Top Artist: ${topArtist}
+📊 Unique Songs: ${agg.uniqueSongs} | Total Scrobbles: ${agg.totalScrobbles}
+Stream high-quality music on Airbeats!`;
+
+    navigator.clipboard.writeText(text).then(() => {
+        window.showStatsToast("Insight summary copied to clipboard!");
+    }).catch(() => {
+        window.showStatsToast("Report copied!");
+    });
+};
+
+/* ==========================================================================
+   PROFILE & RANK BADGE CUSTOMIZER MODAL
+   ========================================================================== */
+window.openProfileCustomizerModal = function() {
+    const profile = window.StatsEngine.getProfile();
+    const totalHours = window.StatsEngine.getTotalHours();
+    const realRank = window.StatsEngine.getCurrentRank(totalHours);
+    const selectedBadge = profile.displayedBadge || '';
+
+    const avatarPresets = [
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&h=150&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face',
+        'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&h=150&fit=crop&crop=face'
+    ];
+
+    const overlay = document.createElement('div');
+    overlay.className = 'insight-modal-overlay';
+    overlay.id = 'airbeats-profile-modal';
+    overlay.onclick = (e) => {
+        if (e.target === overlay) window.closeProfileModal();
+    };
+
+    overlay.innerHTML = `
+        <div class="insight-modal-card" style="max-width: 580px;">
+            <div class="insight-header">
+                <div>
+                    <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #fff;">Profile & Badge Customizer</h2>
+                    <div style="font-size: 13px; color: var(--text-secondary);">Personalize your display identity on Airbeats</div>
+                </div>
+                <button onclick="window.closeProfileModal()" style="background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- NAME INPUT -->
+            <div style="margin-bottom: 22px;">
+                <label style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">
+                    Display Name
+                </label>
+                <input type="text" id="custom-profile-name" value="${profile.name}" style="width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 15px; font-weight: 600; outline: none;">
+            </div>
+
+            <!-- AVATAR SELECTION -->
+            <div style="margin-bottom: 22px;">
+                <label style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px; text-transform: uppercase;">
+                    Choose Avatar
+                </label>
+                <div style="display: flex; gap: 12px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px;">
+                    ${avatarPresets.map(av => `
+                        <img src="${av}" onclick="window.selectAvatarPreset('${av}')" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; cursor: pointer; border: 2px solid ${profile.avatar === av ? 'var(--accent)' : 'transparent'}; transition: transform 0.2s;" class="preset-avatar-option" alt="Preset">
+                    `).join('')}
+                </div>
+                <input type="text" id="custom-profile-avatar" value="${profile.avatar}" placeholder="Or paste custom image URL..." style="width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; color: var(--text-secondary); font-size: 13px; outline: none;">
+            </div>
+
+            <!-- BADGE SHOWCASE GRID -->
+            <div style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
+                    <label style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">
+                        Showcase Badge
+                    </label>
+                    <span style="font-size: 11px; color: var(--accent); cursor: pointer;" onclick="window.selectBadgeAuto()">
+                        Auto (Highest Rank: ${realRank.name})
+                    </span>
+                </div>
+                <div class="badge-selector-grid">
+                    ${window.StatsEngine.RANKS.map(rank => {
+                        const isUnlocked = totalHours >= rank.threshold;
+                        const isSelected = selectedBadge ? selectedBadge.toLowerCase() === rank.name.toLowerCase() : (!selectedBadge && rank.name === realRank.name);
+                        return `
+                            <div class="badge-select-item ${isUnlocked ? '' : 'locked'} ${isSelected ? 'selected' : ''}" onclick="${isUnlocked ? `window.selectBadgeChoice('${rank.name}')` : `window.showStatsToast('Requires ${rank.threshold} listening hours (current: ${totalHours.toFixed(1)}h)')`}">
+                                ${!isUnlocked ? '<i class="fas fa-lock lock-icon"></i>' : ''}
+                                ${window.StatsEngine.renderRankBadge(rank.name, 36)}
+                                <div class="badge-name-lbl">${rank.name}</div>
+                                <div class="badge-hrs-lbl">${rank.threshold}h</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- SAVE BUTTON -->
+            <button class="stats-action-btn stats-action-btn-insight" style="width: 100%; justify-content: center; padding: 14px;" onclick="window.saveCustomizedProfile()">
+                <i class="fas fa-check"></i> Save Changes
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+};
+
+window.closeProfileModal = function() {
+    const modal = document.getElementById('airbeats-profile-modal');
+    if (modal) modal.remove();
+};
+
+window.selectedCustomBadge = null;
+
+window.selectAvatarPreset = function(url) {
+    const inp = document.getElementById('custom-profile-avatar');
+    if (inp) inp.value = url;
+    document.querySelectorAll('.preset-avatar-option').forEach(img => {
+        img.style.borderColor = (img.src === url) ? 'var(--accent)' : 'transparent';
+    });
+};
+
+window.selectBadgeChoice = function(badgeName) {
+    window.selectedCustomBadge = badgeName;
+    document.querySelectorAll('.badge-select-item').forEach(el => el.classList.remove('selected'));
+    const clicked = Array.from(document.querySelectorAll('.badge-select-item')).find(el => el.innerText.includes(badgeName));
+    if (clicked) clicked.classList.add('selected');
+};
+
+window.selectBadgeAuto = function() {
+    window.selectedCustomBadge = '';
+    document.querySelectorAll('.badge-select-item').forEach(el => el.classList.remove('selected'));
+    window.showStatsToast("Set to auto-show highest rank!");
+};
+
+window.saveCustomizedProfile = function() {
+    const name = document.getElementById('custom-profile-name').value;
+    const avatar = document.getElementById('custom-profile-avatar').value;
+    window.StatsEngine.saveProfile(name, avatar, window.selectedCustomBadge);
+    window.closeProfileModal();
+    window.showStatsToast("Profile updated successfully!");
+    renderStats();
+};
+
+window.showStatsToast = function(msg) {
+    let toast = document.getElementById('stats-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'stats-toast';
+        toast.className = 'stats-toast';
+        document.body.appendChild(toast);
+    }
+    toast.innerText = msg;
+    toast.classList.add('show');
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2800);
+};
 

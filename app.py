@@ -212,6 +212,62 @@ def restore_backup():
                                 })
                     except Exception as e_pl:
                         print(f"[BACKUP] Playlists parse notice: {e_pl}")
+
+                    # 4. Query Listening Events for Stats Engine
+                    stats_events = []
+                    try:
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='event';")
+                        if cursor.fetchone():
+                            cursor.execute("PRAGMA table_info(event);")
+                            e_cols = [c[1] for c in cursor.fetchall()]
+                            cursor.execute("PRAGMA table_info(song);")
+                            s_cols = [c[1] for c in cursor.fetchall()]
+
+                            has_play_time = 'playTime' in e_cols
+                            has_thumb = 'thumbnailUrl' in s_cols
+                            has_album_id = 'albumId' in s_cols
+                            has_album_name = 'albumName' in s_cols
+
+                            play_time_expr = "e.playTime" if has_play_time else "COALESCE(s.duration * 1000, 180000)"
+                            thumb_expr = "s.thumbnailUrl" if has_thumb else "NULL"
+                            album_id_expr = "s.albumId" if has_album_id else "NULL"
+                            album_name_expr = "s.albumName" if has_album_name else "NULL"
+
+                            events_query = f"""
+                            SELECT 
+                                e.songId,
+                                s.title,
+                                s.duration,
+                                {thumb_expr} as thumbnailUrl,
+                                {album_id_expr} as albumId,
+                                {album_name_expr} as albumName,
+                                a.id as artistId,
+                                a.name as artistName,
+                                e.timestamp,
+                                {play_time_expr} as playTime
+                            FROM event e
+                            JOIN song s ON e.songId = s.id
+                            LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0
+                            LEFT JOIN artist a ON sam.artistId = a.id
+                            ORDER BY e.timestamp DESC
+                            """
+                            cursor.execute(events_query)
+                            for ev_row in cursor.fetchall():
+                                song_id, title, duration, thumb, alb_id, alb_name, art_id, art_name, t_stamp, p_time = ev_row
+                                stats_events.append({
+                                    "songId": song_id,
+                                    "title": title or "Unknown Track",
+                                    "artist": art_name or "Unknown Artist",
+                                    "artistId": art_id or "",
+                                    "album": alb_name or "",
+                                    "albumId": alb_id or "",
+                                    "image": thumb or "https://ui-avatars.com/api/?name=Song&background=333&color=fff",
+                                    "duration": duration or 0,
+                                    "timeListenedMs": int(p_time if p_time is not None else (duration * 1000 if duration else 180000)),
+                                    "timestamp": t_stamp
+                                })
+                    except Exception as e_ev:
+                        print(f"[BACKUP] Stats events parse notice: {e_ev}")
                         
                     conn.close()
                 except Exception as e_db:
@@ -221,7 +277,8 @@ def restore_backup():
                 "success": True,
                 "history": history,
                 "favoriteSongs": favorites,
-                "playlists": playlists
+                "playlists": playlists,
+                "statsEvents": stats_events
             })
     except Exception as e:
         print("[BACKUP] Restore exception:", e)

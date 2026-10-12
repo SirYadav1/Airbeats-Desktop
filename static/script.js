@@ -90,15 +90,11 @@ window.setDynamicIsland = function(enabled) {
                         window.electronAPI.updateDynamicIsland({ type: 'state', state: 'play' });
                     }
                 } else if (attempt === 0) {
-                    // nothing loaded yet, placeholder so the island still renders
-                    window.electronAPI.updateDynamicIsland({
-                        type: 'track',
-                        title: 'Airbeats Desktop',
-                        artist: 'Ready to play',
-                        image: '',
-                        isFav: false,
-                        isRepeat: false
-                    });
+                    // nothing loaded yet -- leave the island hidden rather than
+                    // showing a fake "Airbeats Desktop" track. dynamic-island.html
+                    // starts as .island hidden, so it stays out of the way until
+                    // a real song arrives.
+                    window.electronAPI.updateDynamicIsland({ type: 'state', state: 'pause' });
                 }
 
                 if (attempt < 4) setTimeout(() => pushCurrentTrack(attempt + 1), 250);

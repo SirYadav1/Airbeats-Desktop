@@ -1,4 +1,4 @@
-﻿window.addEventListener('error', function(e) { if (e.target.tagName === 'IMG') { if (e.target.getAttribute('data-fallback-applied')) return; e.target.setAttribute('data-fallback-applied', 'true'); e.target.src = 'https://via.placeholder.com/150x150/1c1a1a/c6e355?text=Music'; } }, true);
+window.addEventListener('error', function(e) { if (e.target.tagName === 'IMG') { if (e.target.getAttribute('data-fallback-applied')) return; e.target.setAttribute('data-fallback-applied', 'true'); e.target.src = 'https://via.placeholder.com/150x150/1c1a1a/c6e355?text=Music'; } }, true);
 
 
 window.getClickableArtistsHtml = function(song) {
@@ -340,8 +340,7 @@ const router = async (forceRefresh = false) => {
         else if (route === 'settings' && id === 'appearance') await renderSettingsAppearance();
         else if (route === 'settings' && id === 'about') await renderSettingsAbout();
         else if (route === 'settings' && id === 'updates') await renderSettingsUpdates();
-        else if (route === 'settings' && id === 'profile') await window.renderStatsProfile();
-        else if (route === 'stats') await window.renderGlobalStats();
+        else if (route === 'settings' && (id === 'backup' || !id)) await renderSettingsBackup();
         else routerView.innerHTML = `<h2>Page Not Found</h2>`;
     } catch (e) {
         console.error('Route error', e);
@@ -2280,6 +2279,190 @@ window.updateSidebarState = function(isSettings) {
         if(topLinks) topLinks.style.visibility = 'visible';
     }
 }
+
+async function renderSettingsBackup() {
+    routerView.innerHTML = `
+        <div class="settings-page" style="padding: 20px 30px; max-width: 800px; margin: 0 auto; color: var(--text-primary);">
+            <div class="hero-header" style="background: none; border-bottom: 1px solid var(--border-color); margin-bottom: 30px; padding: 10px 0 20px 0;">
+                <div class="hero-info">
+                    <div class="hero-title" style="font-size: 32px; font-weight: 700; margin-bottom: 6px;">Backup & Restore</div>
+                    <div class="hero-meta" style="color: var(--text-secondary); font-size: 14px;">Import your library from the AirBeats Android app (.backup) or export your desktop library</div>
+                </div>
+            </div>
+
+            <!-- RESTORE ANDROID BACKUP CARD -->
+            <div style="background: var(--search-bg); padding: 30px; border-radius: 16px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                <div style="display: flex; align-items: flex-start; gap: 20px;">
+                    <div style="width: 52px; height: 52px; border-radius: 14px; background: rgba(29, 185, 84, 0.12); color: #1ed760; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;">
+                        <i class="fas fa-file-import"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 600;">Restore Android App Backup</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                            Upload your AirBeats Android app <code>.backup</code> file. Your playlists, favorited tracks, and listening history will be imported directly into this desktop app.
+                        </p>
+                        
+                        <div id="backup-dropzone" style="border: 2px dashed rgba(255,255,255,0.18); border-radius: 12px; padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.25s ease;" onclick="document.getElementById('androidBackupInput').click()">
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: #1ed760; margin-bottom: 12px; display: block; opacity: 0.9;"></i>
+                            <div style="font-weight: 600; font-size: 16px; margin-bottom: 6px; color: var(--text-primary);">Click or drag & drop your .backup file here</div>
+                            <div style="color: var(--text-secondary); font-size: 13px;">Supports AirBeats .backup and .zip backup archives</div>
+                        </div>
+                        <input type="file" id="androidBackupInput" accept=".backup,.zip" style="display: none;" onchange="window.handleBackupUpload(this)">
+
+                        <div id="backup-status" style="margin-top: 18px; display: none; font-size: 14px; padding: 14px 18px; border-radius: 10px; font-weight: 500;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXPORT DESKTOP LIBRARY CARD -->
+            <div style="background: var(--search-bg); padding: 30px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                <div style="display: flex; align-items: flex-start; gap: 20px;">
+                    <div style="width: 52px; height: 52px; border-radius: 14px; background: rgba(59, 130, 246, 0.12); color: #3b82f6; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;">
+                        <i class="fas fa-file-export"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 600;">Export Desktop Library</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                            Save your desktop favorites, custom playlists, and recently played songs to a JSON backup file on your local machine.
+                        </p>
+                        <button class="btn" onclick="window.exportDesktopBackup()" style="background: var(--app-bg); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.12); padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 10px; font-size: 14px; transition: all 0.2s ease;">
+                            <i class="fas fa-download"></i> Export Library (.json)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Dropzone drag-and-drop support
+    const dropzone = document.getElementById('backup-dropzone');
+    if (dropzone) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = '#1ed760';
+                dropzone.style.background = 'rgba(29, 185, 84, 0.05)';
+            }, false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.style.borderColor = 'rgba(255,255,255,0.18)';
+                dropzone.style.background = 'transparent';
+            }, false);
+        });
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files && files.length > 0) {
+                const input = document.getElementById('androidBackupInput');
+                input.files = files;
+                window.handleBackupUpload(input);
+            }
+        });
+    }
+
+    // Highlight sidebar
+    const items = document.querySelectorAll('#sidebar-settings-menu .nav-item');
+    items.forEach(el => el.classList.remove('active'));
+    const current = document.getElementById('nav-settings-backup');
+    if (current) current.classList.add('active');
+}
+
+window.handleBackupUpload = async function(input) {
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    const statusDiv = document.getElementById('backup-status');
+    
+    if (!file.name.endsWith('.backup') && !file.name.endsWith('.zip')) {
+        if (statusDiv) {
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = 'rgba(255, 68, 68, 0.12)';
+            statusDiv.style.color = '#ff4444';
+            statusDiv.innerHTML = '<i class="fas fa-times-circle"></i> Please select a valid AirBeats <code>.backup</code> or <code>.zip</code> file.';
+        }
+        return;
+    }
+
+    if (statusDiv) {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = 'rgba(59, 130, 246, 0.12)';
+        statusDiv.style.color = '#3b82f6';
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restoring your library from backup...';
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/restore_backup', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            let restoredMsg = [];
+            // 1. History
+            if (data.history && Array.isArray(data.history) && data.history.length > 0) {
+                localStorage.setItem('recentlyPlayed', JSON.stringify(data.history));
+                restoredMsg.push(`${data.history.length} history tracks`);
+            }
+            // 2. Favorites
+            if (data.favoriteSongs && Array.isArray(data.favoriteSongs) && data.favoriteSongs.length > 0) {
+                localStorage.setItem('favoriteSongs', JSON.stringify(data.favoriteSongs));
+                restoredMsg.push(`${data.favoriteSongs.length} favorite songs`);
+            }
+            // 3. Playlists
+            if (data.playlists && Array.isArray(data.playlists) && data.playlists.length > 0) {
+                localStorage.setItem('user_playlists', JSON.stringify(data.playlists));
+                restoredMsg.push(`${data.playlists.length} playlists`);
+            }
+
+            const summary = restoredMsg.length > 0 ? restoredMsg.join(', ') : 'All library data';
+            if (statusDiv) {
+                statusDiv.style.background = 'rgba(29, 185, 84, 0.15)';
+                statusDiv.style.color = '#1ed760';
+                statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> Successfully restored: <b>${summary}</b>! Reloading player...`;
+            }
+            setTimeout(() => {
+                window.location.reload();
+            }, 1800);
+        } else {
+            throw new Error(data.error || 'Failed to parse backup archive.');
+        }
+    } catch (e) {
+        if (statusDiv) {
+            statusDiv.style.background = 'rgba(255, 68, 68, 0.12)';
+            statusDiv.style.color = '#ff4444';
+            statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Restore failed: ${e.message}`;
+        }
+    }
+};
+
+window.exportDesktopBackup = function() {
+    const backupData = {
+        app: "Airbeats Desktop",
+        version: "6.2.0",
+        exportedAt: new Date().toISOString(),
+        favoriteSongs: JSON.parse(localStorage.getItem('favoriteSongs') || '[]'),
+        user_playlists: JSON.parse(localStorage.getItem('user_playlists') || '[]'),
+        recentlyPlayed: JSON.parse(localStorage.getItem('recentlyPlayed') || '[]'),
+        saved_albums: JSON.parse(localStorage.getItem('saved_albums') || '{}'),
+        subscribedArtists: JSON.parse(localStorage.getItem('subscribedArtists') || '[]')
+    };
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `airbeats-backup-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
 
 async function renderSettingsAppearance() {
     routerView.innerHTML = `

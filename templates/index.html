@@ -351,12 +351,8 @@
         document.addEventListener("DOMContentLoaded", () => {
             const hasOnboarded = localStorage.getItem('onboarded');
             const obOverlay = document.getElementById('onboarding-overlay');
-            const authOverlay = document.getElementById('auth-overlay');
-            
-            if (!hasOnboarded) {
-                // Show onboarding, hide auth
+            if (!hasOnboarded && obOverlay) {
                 obOverlay.style.display = 'flex';
-                if (authOverlay) authOverlay.style.display = 'none';
             }
         });
 
@@ -373,158 +369,21 @@
                     next.classList.remove('exit');
                     next.classList.add('active');
                 }
-            }, 300); // Wait for exit animation
+            }, 300);
         };
 
         window.finishOnboarding = function() {
             const obOverlay = document.getElementById('onboarding-overlay');
-            const authOverlay = document.getElementById('auth-overlay');
-            
-            obOverlay.style.opacity = '0';
-            localStorage.setItem('onboarded', 'true');
-            
-            setTimeout(() => {
-                obOverlay.style.display = 'none';
-                
-                // Show login screen if they aren't logged in
-                const authState = localStorage.getItem('auth_state');
-                if (authState !== 'guest' && authState !== 'logged_in') {
-                    if (authOverlay) {
-                        authOverlay.style.opacity = '0';
-                        authOverlay.style.display = 'flex';
-                        // fade in
-                        setTimeout(() => {
-                            authOverlay.style.transition = 'opacity 0.8s ease';
-                            authOverlay.style.opacity = '1';
-                        }, 50);
-                    }
-                }
-            }, 800);
+            if (obOverlay) {
+                obOverlay.style.opacity = '0';
+                localStorage.setItem('onboarded', 'true');
+                setTimeout(() => {
+                    obOverlay.style.display = 'none';
+                }, 500);
+            }
         };
     </script>
     <!-- END ONBOARDING OVERLAY -->
-
-
-    <!-- AUTH OVERLAY -->
-    <style id="auth-styles">
-        @keyframes gradientMesh {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        
-        @keyframes float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-            100% { transform: translateY(0px); }
-        }
-
-        #auth-overlay {
-            /* Liquid animated mesh background */
-            background: linear-gradient(-45deg, #0f172a, #3b0764, #000000, #064e3b);
-            background-size: 400% 400%;
-            animation: gradientMesh 15s ease infinite;
-        }
-
-        .glass-card {
-            background: rgba(20, 20, 25, 0.35);
-            backdrop-filter: blur(24px) saturate(180%);
-            -webkit-backdrop-filter: blur(24px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 28px;
-            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            animation: float 6s ease-in-out infinite;
-        }
-
-        .glass-input {
-            background: rgba(255, 255, 255, 0.04) !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
-            border-radius: 12px !important;
-            color: white !important;
-            transition: all 0.3s ease !important;
-        }
-        .glass-input:focus {
-            background: rgba(255, 255, 255, 0.08) !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
-            outline: none !important;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.05) !important;
-        }
-
-        .glass-btn-primary {
-            background: linear-gradient(135deg, #1db954, #128a3c) !important;
-            box-shadow: 0 10px 20px rgba(29, 185, 84, 0.3) !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            transition: all 0.3s ease !important;
-        }
-        .glass-btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 25px rgba(29, 185, 84, 0.4) !important;
-            filter: brightness(1.1);
-        }
-
-        .glass-btn-secondary {
-            background: rgba(255, 255, 255, 0.05) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            transition: all 0.3s ease !important;
-        }
-        .glass-btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1) !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            transform: translateY(-2px);
-        }
-        
-        .glass-btn-google {
-            background: rgba(255, 255, 255, 0.95) !important;
-            color: #111 !important;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2) !important;
-            transition: all 0.3s ease !important;
-        }
-        .glass-btn-google:hover {
-            transform: translateY(-2px);
-            background: #ffffff !important;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3) !important;
-        }
-    </style>
-    
-    <div id="auth-overlay" style="display: none; position: fixed; inset: 0; z-index: 999999; flex-direction: column; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;">
-        
-        <div class="glass-card" style="padding: 45px 40px; width: 420px; max-width: 90%; text-align: center; position: relative; overflow: hidden;">
-            
-            <!-- Subtle glow inside the card -->
-            <div style="position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at center, rgba(29, 185, 84, 0.08) 0%, transparent 50%); pointer-events: none;"></div>
-
-            <img src="https://raw.githubusercontent.com/drkvenom786/Airbeats/137e3935198c25bfbd5eef1a050002ed52fa84ff/icon.png" alt="Airbeats" style="width: 88px; height: 88px; border-radius: 24px; margin-bottom: 24px; box-shadow: 0 15px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);">
-            
-            <h2 id="auth-title" style="color: #ffffff; margin: 0 0 10px 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Welcome to Airbeats</h2>
-            <p id="auth-subtitle" style="color: rgba(255,255,255,0.6); margin: 0 0 30px 0; font-size: 15px; font-weight: 400;">Sign in to your account.</p>
-            
-            <div id="auth-error" style="color: #ff5555; background: rgba(255,0,0,0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,0,0,0.2); font-size: 13px; margin-bottom: 20px; display: none;"></div>
-
-            <input type="text" class="glass-input" id="auth-name" placeholder="Your Name" style="width: 100%; box-sizing: border-box; padding: 14px; margin-bottom: 14px; display: none; font-size: 15px;">
-            <input type="email" class="glass-input" id="auth-email" placeholder="Email Address" style="width: 100%; box-sizing: border-box; padding: 14px; margin-bottom: 14px; font-size: 15px;">
-            <input type="password" class="glass-input" id="auth-password" placeholder="Password" style="width: 100%; box-sizing: border-box; padding: 14px; margin-bottom: 24px; font-size: 15px;">
-            
-            <button id="btn-email-login" class="glass-btn-primary" style="width: 100%; padding: 14px; color: white; border-radius: 12px; font-weight: 600; cursor: pointer; margin-bottom: 20px; font-size: 16px; letter-spacing: 0.5px;">
-                Sign In
-            </button>
-
-            <div style="color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 24px;">
-                <span id="auth-toggle-text">Don't have an account?</span> 
-                <a href="#" id="btn-toggle-mode" style="color: #1db954; text-decoration: none; font-weight: 600;">Sign Up</a>
-            </div>
-
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
-                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
-                <span style="margin: 0 15px; color: rgba(255,255,255,0.4); font-size: 12px; font-weight: 500; letter-spacing: 1px;">OR</span>
-                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
-            </div>
-            
-            <button id="btn-guest-login" class="glass-btn-secondary" style="width: 100%; padding: 14px; color: rgba(255,255,255,0.8); border-radius: 12px; font-weight: 500; cursor: pointer; font-size: 15px;">
-                Continue as Guest
-            </button>
-        </div>
-    </div>
 
 
     
@@ -568,13 +427,9 @@
                         <i class="fas fa-arrow-left"></i> Back
                     </a>
                 </div>
-                <div class="nav-section">Account</div>
-                <ul class="nav-links">
-                    <li><a href="#settings/profile" class="nav-item" id="nav-settings-profile">Profile & Badges</a></li>
-                    <li><a href="#" class="nav-item" style="color: #ff4444;" id="nav-logout" onclick="window.logoutUser()">Sign Out</a></li>
-                </ul>
                 <div class="nav-section">Settings</div>
                 <ul class="nav-links">
+                    <li><a href="#settings/backup" class="nav-item" id="nav-settings-backup">Backup & Restore</a></li>
                     <li><a href="#settings/appearance" class="nav-item" id="nav-settings-appearance">Appearance</a></li>
                     <li><a href="#settings/about" class="nav-item" id="nav-settings-about">About</a></li>
                     <li><a href="#settings/updates" class="nav-item" id="nav-settings-updates">Updates</a></li>
@@ -601,12 +456,8 @@
                 </div>
                 
                 <div class="user-profile">
-                    <a href="#stats" style="color: inherit; text-decoration: none; margin-right: 10px;" title="Leaderboard & Stats">
-                        <i class="fas fa-trophy stats-nav-icon"></i>
-                    </a>
-                    <a href="#settings/appearance" style="color: inherit; text-decoration: none;"><i class="fas fa-cog"></i></a>
-                    <i class="far fa-bell"></i>
-                    <img src="https://ui-avatars.com/api/?name=User&background=ddd&color=333" alt="User">
+                    <a href="#settings/backup" style="color: inherit; text-decoration: none; margin-right: 15px;" title="Backup & Restore"><i class="fas fa-hdd"></i></a>
+                    <a href="#settings/appearance" style="color: inherit; text-decoration: none;" title="Settings"><i class="fas fa-cog"></i></a>
                 </div>
             </header>
 
@@ -800,9 +651,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='lyrics.js') }}?v={{ range(1, 999999) | random }}"></script>
-    <script src="{{ url_for('static', filename='stats.js') }}?v={{ range(1, 999999) | random }}"></script>
-
-    <script src="{{ url_for('static', filename='auth.js') }}?v={{ range(1, 999999) | random }}"></script>
 
 </body>
 </html>

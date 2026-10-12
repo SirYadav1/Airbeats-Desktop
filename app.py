@@ -424,101 +424,7 @@ def stats_update_profile():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-import zipfile
-import sqlite3
-import tempfile
-import os
 
-@app.route('/api/stats/restore_backup', methods=['POST'])
-def stats_restore_backup():
-    """Restores Android .bin backup file"""
-    try:
-        if 'file' not in request.files:
-            return jsonify({"error": "No file uploaded"}), 400
-            
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"error": "Empty file"}), 400
-            
-        with tempfile.TemporaryDirectory() as temp_dir:
-            zip_path = os.path.join(temp_dir, 'backup.bin')
-            file.save(zip_path)
-            
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as zf:
-                    zf.extractall(temp_dir)
-            except zipfile.BadZipFile:
-                return jsonify({"error": "Invalid backup file format"}), 400
-                
-            # Extract UUID from airbeats_global_stats.xml
-            user_id = None
-            stats_xml_path = os.path.join(temp_dir, 'airbeats_global_stats.xml')
-            if os.path.exists(stats_xml_path):
-                try:
-                    tree = ET.parse(stats_xml_path)
-                    root = tree.getroot()
-                    for string_elem in root.findall('string'):
-                        if string_elem.get('name') == 'global_stats_user_id':
-                            user_id = string_elem.text
-                            break
-                except Exception as e:
-                    print(f"Error parsing stats XML: {e}")
-                    
-            if not user_id:
-                return jsonify({"error": "Could not extract user ID from backup"}), 400
-                
-            # Extract History from music.db
-            history = []
-            db_path = os.path.join(temp_dir, 'music.db')
-            if os.path.exists(db_path):
-                try:
-                    conn = sqlite3.connect(db_path)
-                    cursor = conn.cursor()
-                    # We need the most recently played songs.
-                    # Join event with song, and maybe artist map
-                    query = """
-                    SELECT 
-                        s.id, 
-                        s.title, 
-                        s.duration,
-                        a.id as artistId,
-                        a.name as artistName,
-                        e.timestamp
-                    FROM event e
-                    JOIN song s ON e.songId = s.id
-                    LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0
-                    LEFT JOIN artist a ON sam.artistId = a.id
-                    ORDER BY e.timestamp DESC
-                    LIMIT 200
-                    """
-                    cursor.execute(query)
-                    rows = cursor.fetchall()
-                    for row in rows:
-                        song_id, title, duration, artist_id, artist_name, timestamp = row
-                        
-                        # Format for web app recentlyPlayed structure
-                        history_item = {
-                            "id": song_id,
-                            "title": title,
-                            "subtitle": artist_name or "Unknown Artist",
-                            "type": "song",
-                            "image": "https://ui-avatars.com/api/?name=Song&background=333&color=fff", # We don't have images in DB
-                            "artistIds": artist_id or "",
-                            "playedAt": timestamp
-                        }
-                        history.append(history_item)
-                    conn.close()
-                except Exception as e:
-                    print(f"Error parsing SQLite db: {e}")
-            
-            return jsonify({
-                "success": True,
-                "userId": user_id,
-                "history": history
-            })
-    except Exception as e:
-        print("[STATS] Restore error:", e)
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/stats/profile_html')
@@ -659,8 +565,6 @@ def stats_profile_html():
 
             <div class="profile-actions">
                 <button class="stats-btn-secondary" onclick="window.location.hash='#stats'"><i class="fas fa-trophy"></i> View Leaderboard</button>
-                <button class="stats-btn-secondary" style="margin-left: 10px;" onclick="document.getElementById('backupFileInput').click()"><i class="fas fa-upload"></i> Restore Backup (.backup)</button>
-                <input type="file" id="backupFileInput" accept=".backup,.zip" style="display: none;" onchange="window.restoreBackup(this)">
             </div>
         </div>
         """
@@ -981,46 +885,6 @@ def auth_signup():
     try:
         r = requests.post(f"{AUTH_API_BASE_URL}/api/projects/{PROJECT_ID}/signup", json=data, timeout=15)
         return jsonify(r.json()), r.status_code
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/auth/backup', methods=['POST'])
-def auth_backup():
-    email = request.args.get('email')
-    if not email:
-        return jsonify({'error': 'Missing email'}), 400
-    folder = email.replace('@', '_at_').replace('.', '_dot_')
-    file_name = f"airbeats/backups/{folder}/desktop_backup.json"
-    data = request.json
-    try:
-        r = requests.post(
-            f"{STATS_BASE_URL}/upload?file={file_name}",
-            json=data,
-            headers={'X-API-Key': STATS_API_KEY},
-            timeout=15
-        )
-        return jsonify({'success': r.ok}), r.status_code
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/auth/restore', methods=['GET'])
-def auth_restore():
-    email = request.args.get('email')
-    if not email:
-        return jsonify({'error': 'Missing email'}), 400
-    folder = email.replace('@', '_at_').replace('.', '_dot_')
-    file_name = f"airbeats/backups/{folder}/desktop_backup.json"
-    try:
-        import time
-        r = requests.get(
-            f"{STATS_BASE_URL}/download?file={file_name}&_t={int(time.time()*1000)}",
-            headers={'Cache-Control': 'no-cache'},
-            timeout=15
-        )
-        if r.ok:
-            return jsonify(r.json()), 200
-        else:
-            return jsonify({'error': 'Not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 # ------------------------------------

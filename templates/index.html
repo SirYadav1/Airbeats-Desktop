@@ -321,10 +321,10 @@
             
             <div class="feature-grid">
                 <div class="feature-item">
-                    <div class="feature-icon"><i class="fas fa-cloud"></i></div>
+                    <div class="feature-icon"><i class="fas fa-music"></i></div>
                     <div>
-                        <div style="color: white; font-size: 18px; font-weight: 600; margin-bottom: 4px;">True Cloud Sync</div>
-                        <div style="color: rgba(255,255,255,0.5); font-size: 14px;">Your playlists, history, and favorites automatically sync between Windows, Linux, and Android.</div>
+                        <div style="color: white; font-size: 18px; font-weight: 600; margin-bottom: 4px;">Infinite Music Library</div>
+                        <div style="color: rgba(255,255,255,0.5); font-size: 14px;">Stream millions of songs, albums, and artists completely free with zero ads.</div>
                     </div>
                 </div>
                 <div class="feature-item">
@@ -497,7 +497,7 @@
             <img src="https://raw.githubusercontent.com/drkvenom786/Airbeats/137e3935198c25bfbd5eef1a050002ed52fa84ff/icon.png" alt="Airbeats" style="width: 88px; height: 88px; border-radius: 24px; margin-bottom: 24px; box-shadow: 0 15px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);">
             
             <h2 id="auth-title" style="color: #ffffff; margin: 0 0 10px 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Welcome to Airbeats</h2>
-            <p id="auth-subtitle" style="color: rgba(255,255,255,0.6); margin: 0 0 30px 0; font-size: 15px; font-weight: 400;">Sign in to sync your library.</p>
+            <p id="auth-subtitle" style="color: rgba(255,255,255,0.6); margin: 0 0 30px 0; font-size: 15px; font-weight: 400;">Sign in to your account.</p>
             
             <div id="auth-error" style="color: #ff5555; background: rgba(255,0,0,0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,0,0,0.2); font-size: 13px; margin-bottom: 20px; display: none;"></div>
 
@@ -514,16 +514,11 @@
                 <a href="#" id="btn-toggle-mode" style="color: #1db954; text-decoration: none; font-weight: 600;">Sign Up</a>
             </div>
 
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
                 <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
                 <span style="margin: 0 15px; color: rgba(255,255,255,0.4); font-size: 12px; font-weight: 500; letter-spacing: 1px;">OR</span>
                 <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
             </div>
-
-            <button id="btn-google-login" class="glass-btn-google" style="width: 100%; padding: 14px; border-radius: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; font-size: 15px;">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" style="width: 20px;">
-                Continue with Google
-            </button>
             
             <button id="btn-guest-login" class="glass-btn-secondary" style="width: 100%; padding: 14px; color: rgba(255,255,255,0.8); border-radius: 12px; font-weight: 500; cursor: pointer; font-size: 15px;">
                 Continue as Guest
@@ -807,10 +802,6 @@
     <script src="{{ url_for('static', filename='lyrics.js') }}?v={{ range(1, 999999) | random }}"></script>
     <script src="{{ url_for('static', filename='stats.js') }}?v={{ range(1, 999999) | random }}"></script>
 
-    <!-- Firebase SDK -->
-    
-    
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="{{ url_for('static', filename='auth.js') }}?v={{ range(1, 999999) | random }}"></script>
 
 </body>

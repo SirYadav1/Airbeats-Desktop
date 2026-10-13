@@ -386,18 +386,6 @@ window.ListenTogether = {
     },
 
     _updateUI() {
-        // Mini Player live indicator pill
-        const miniIndicator = document.getElementById('lt-mini-indicator');
-        const miniText = document.getElementById('lt-mini-indicator-text');
-        if (miniIndicator) {
-            if (this.session && this.code) {
-                miniIndicator.style.display = 'inline-flex';
-                if (miniText) miniText.textContent = `SYNCED • ${this.code}`;
-            } else {
-                miniIndicator.style.display = 'none';
-            }
-        }
-
         // Modal re-render if visible
         const overlay = document.getElementById('lt-modal-overlay');
         if (overlay && overlay.style.display === 'flex') {

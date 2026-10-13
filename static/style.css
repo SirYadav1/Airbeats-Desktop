@@ -3669,13 +3669,11 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
 /* ==========================================================================
    NOW PLAYING RIGHT PANEL AUTO-HIDE & FULL-WIDTH EXPANSION
    ========================================================================== */
-body.route-home .right-panel,
 body:not(.has-active-track) .right-panel,
 body.right-panel-collapsed .right-panel {
     display: none !important;
 }
 
-body.route-home .main-content,
 body:not(.has-active-track) .main-content,
 body.right-panel-collapsed .main-content {
     border-right: none !important;

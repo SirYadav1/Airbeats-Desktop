@@ -288,12 +288,12 @@ const router = async (forceRefresh = false) => {
     const [route, id] = hash.substring(1).split('/');
     const cacheKey = route + (id ? '/' + id : '');
 
-    // Set route-home on body to remove side space and keep home screen full-width
+    // Set route-home on body to style home components
     const isHome = (route === 'home');
     document.body.classList.toggle('route-home', isHome);
     const npToggle = document.getElementById('topNowPlayingToggle');
     if (npToggle) {
-        npToggle.style.display = (isHome || !document.body.classList.contains('has-active-track')) ? 'none' : 'inline-block';
+        npToggle.style.display = document.body.classList.contains('has-active-track') ? 'inline-block' : 'none';
     }
     
     // Toggle sidebar state for settings
@@ -1756,6 +1756,12 @@ async function loadCurrentTrack() {
         rpImage.src = getHighestQualityImage(track.image);
         rpImage.classList.remove('skeleton');
     }
+    
+    // Reveal right-panel queue menu when playing tracks
+    document.body.classList.add('has-active-track');
+    document.body.classList.remove('right-panel-collapsed');
+    const toggleBtnEl = document.getElementById('topNowPlayingToggle');
+    if (toggleBtnEl) toggleBtnEl.style.display = 'inline-block';
     
     if (likeBtn) {
         const isFav = favoriteSongs.some(s => s.id === track.id);
@@ -5475,7 +5481,6 @@ window.showStatsToast = function(msg) {
    DYNAMIC NOW PLAYING RIGHT-PANEL CONTROLLER
    ========================================================================== */
 window.toggleRightPanel = function(show) {
-    if (document.body.classList.contains('route-home')) return;
     const hasTrack = document.body.classList.contains('has-active-track');
     if (show === undefined) {
         if (!hasTrack) return;
@@ -5490,25 +5495,21 @@ window.toggleRightPanel = function(show) {
 if (window.audio) {
     audio.addEventListener('play', () => {
         document.body.classList.add('has-active-track');
-        if (!document.body.classList.contains('route-home')) {
-            document.body.classList.remove('right-panel-collapsed');
-            const toggleBtn = document.getElementById('topNowPlayingToggle');
-            if (toggleBtn) toggleBtn.style.display = 'inline-block';
-        }
+        document.body.classList.remove('right-panel-collapsed');
+        const toggleBtn = document.getElementById('topNowPlayingToggle');
+        if (toggleBtn) toggleBtn.style.display = 'inline-block';
     });
 }
 
-// Hook into song playback to reveal right-panel automatically (except in home screen)
+// Hook into song playback to reveal right-panel automatically
 (function() {
     const origPlaySingle = window.playSingleTrack;
     if (typeof origPlaySingle === 'function') {
         window.playSingleTrack = async function() {
             document.body.classList.add('has-active-track');
-            if (!document.body.classList.contains('route-home')) {
-                document.body.classList.remove('right-panel-collapsed');
-                const toggleBtn = document.getElementById('topNowPlayingToggle');
-                if (toggleBtn) toggleBtn.style.display = 'inline-block';
-            }
+            document.body.classList.remove('right-panel-collapsed');
+            const toggleBtn = document.getElementById('topNowPlayingToggle');
+            if (toggleBtn) toggleBtn.style.display = 'inline-block';
             return origPlaySingle.apply(this, arguments);
         };
     }
@@ -5516,11 +5517,9 @@ if (window.audio) {
     if (typeof origPlayList === 'function') {
         window.playList = function() {
             document.body.classList.add('has-active-track');
-            if (!document.body.classList.contains('route-home')) {
-                document.body.classList.remove('right-panel-collapsed');
-                const toggleBtn = document.getElementById('topNowPlayingToggle');
-                if (toggleBtn) toggleBtn.style.display = 'inline-block';
-            }
+            document.body.classList.remove('right-panel-collapsed');
+            const toggleBtn = document.getElementById('topNowPlayingToggle');
+            if (toggleBtn) toggleBtn.style.display = 'inline-block';
             return origPlayList.apply(this, arguments);
         };
     }
@@ -5534,10 +5533,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const txt = (pTitle.innerText || '').trim();
             if (txt && txt.toLowerCase() !== 'no song') {
                 document.body.classList.add('has-active-track');
-                if (!document.body.classList.contains('route-home')) {
-                    const toggleBtn = document.getElementById('topNowPlayingToggle');
-                    if (toggleBtn) toggleBtn.style.display = 'inline-block';
-                }
+                document.body.classList.remove('right-panel-collapsed');
+                const toggleBtn = document.getElementById('topNowPlayingToggle');
+                if (toggleBtn) toggleBtn.style.display = 'inline-block';
             }
         });
         obs.observe(pTitle, { childList: true, subtree: true, characterData: true });

@@ -623,6 +623,113 @@ def add_yt_routes(app, get_lyrics_fn):
         except Exception as e:
             return jsonify({"success": False, "error": str(e)})
 
+    @app.route('/api/explore', endpoint='yt_explore')
+    def api_explore():
+        try:
+            now = time.time()
+            if hasattr(api_explore, 'cache') and (now - getattr(api_explore, 'cache_time', 0) < 600):
+                return jsonify({"success": True, "data": api_explore.cache})
+
+            exp = {}
+            try:
+                exp = yt.get_explore()
+            except Exception as e:
+                print("yt.get_explore exception:", e)
+
+            # 1. New Releases
+            formatted_new_releases = []
+            for item in exp.get("new_releases", []):
+                title = item.get("title", "")
+                browse_id = item.get("browseId", "")
+                artists = ", ".join([a.get("name", "") for a in item.get("artists", [])]) if item.get("artists") else "Unknown Artist"
+                thumbnails = item.get("thumbnails", [])
+                img_url = thumbnails[-1]["url"] if thumbnails else ""
+                album_type = item.get("type", "Album")
+                formatted_new_releases.append({
+                    "id": browse_id,
+                    "name": title,
+                    "title": title,
+                    "type": album_type,
+                    "image": [{"quality": "500x500", "url": img_url}],
+                    "artists": {
+                        "primary": [{"name": artists}]
+                    }
+                })
+
+            # 2. Trending
+            formatted_trending = []
+            trending_raw = exp.get("trending", {})
+            trending_items = trending_raw.get("items", []) if isinstance(trending_raw, dict) else []
+            for item in trending_items:
+                formatted_trending.append(format_song(item))
+
+            # 3. Mood Categories
+            mood_categories = {}
+            try:
+                mood_categories = yt.get_mood_categories()
+            except Exception as e:
+                print("yt.get_mood_categories exception:", e)
+                if exp.get("moods_and_genres"):
+                    mood_categories = {"Moods & moments": exp.get("moods_and_genres", []), "Genres": []}
+
+            # 4. Charts (Videos and Artists)
+            top_charts = []
+            top_artists = []
+            try:
+                charts = yt.get_charts(country='US')
+                for v in charts.get('videos', []):
+                    top_charts.append({
+                        "id": v.get('playlistId', ''),
+                        "title": v.get('title', ''),
+                        "image": v.get('thumbnails', [{}])[-1].get('url', '')
+                    })
+                for a in charts.get('artists', [])[:20]:
+                    top_artists.append({
+                        "id": a.get('browseId', ''),
+                        "name": a.get('title', ''),
+                        "title": a.get('title', ''),
+                        "subscribers": a.get('subscribers', ''),
+                        "rank": a.get('rank', ''),
+                        "image": [{"quality": "500x500", "url": a.get('thumbnails', [{}])[-1].get('url', '')}]
+                    })
+            except Exception as e:
+                print("yt.get_charts exception:", e)
+
+            result_data = {
+                "new_releases": formatted_new_releases,
+                "trending": formatted_trending,
+                "mood_categories": mood_categories,
+                "top_charts": top_charts,
+                "top_artists": top_artists
+            }
+
+            api_explore.cache = result_data
+            api_explore.cache_time = now
+            return jsonify({"success": True, "data": result_data})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+
+    @app.route('/api/mood_playlists', endpoint='yt_mood_playlists')
+    def api_mood_playlists():
+        params = request.args.get('params', '')
+        title = request.args.get('title', 'Mood & Genre')
+        if not params:
+            return jsonify({"success": False, "error": "Missing params parameter"})
+        try:
+            playlists = yt.get_mood_playlists(params)
+            formatted = []
+            for p in playlists:
+                formatted.append({
+                    "id": p.get('playlistId', ''),
+                    "name": p.get('title', ''),
+                    "title": p.get('title', ''),
+                    "description": p.get('description', ''),
+                    "image": [{"quality": "500x500", "url": p.get('thumbnails', [{}])[-1].get('url', '') if p.get('thumbnails') else ''}]
+                })
+            return jsonify({"success": True, "title": title, "data": formatted})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+
     @app.route('/api/play_stream', endpoint='yt_play_stream')
     def api_play_stream2():
         song_id = request.args.get('id')

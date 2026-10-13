@@ -324,6 +324,8 @@ const router = async (forceRefresh = false) => {
 
     try {
         if (route === 'home') await renderHome();
+        else if (route === 'explore') await renderExplore();
+        else if (route === 'mood') await renderMoodCategory(id);
         else if (route === 'stats') await renderStats();
         else if (route === 'search') await renderSearch(decodeURIComponent(id || ''));
         else if (route === 'artist') await renderArtist(id);
@@ -3254,6 +3256,375 @@ window.focusMobileSearch = function() {
 
 
 
+
+window.renderExplore = async function() {
+    globalLoading.style.display = 'flex';
+    routerView.innerHTML = '';
+
+    const exploreGenres = [
+        "Pop", "Rock", "Hip-Hop", "Lo-Fi", "Electronic", "Indie",
+        "R&B", "Bollywood", "Jazz", "Metal", "Acoustic", "Chill",
+        "Anime", "Classical", "Synthwave", "Party", "Workout", "Sleep"
+    ];
+
+    try {
+        const res = await fetch('/api/explore');
+        const data = await res.json();
+
+        if (!data.success || !data.data) {
+            throw new Error(data.error || 'Failed to load explore data');
+        }
+
+        const exp = data.data;
+        const newReleases = exp.new_releases || [];
+        const trending = exp.trending || [];
+        const moodCats = exp.mood_categories || {};
+        const moods = moodCats['Moods & moments'] || [];
+        const genres = moodCats['Genres'] || [];
+        const topArtists = exp.top_artists || [];
+        const topCharts = exp.top_charts || [];
+
+        // Save trending songs to window.allTracks for instant playback
+        if (!window.allTracks) window.allTracks = {};
+        trending.forEach(s => {
+            if (s && s.id) window.allTracks[s.id] = s;
+        });
+        window.exploreTrendingSongs = trending;
+
+        let html = `
+        <div class="explore-container">
+            <!-- Header -->
+            <div class="explore-hero">
+                <div>
+                    <div class="explore-hero-title">
+                        <i class="fas fa-compass"></i> Explore
+                    </div>
+                    <div class="explore-hero-subtitle">
+                        Discover new releases, trending charts, moods, and genres
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Filter Chips (AirBeats Android Material 3 Style) -->
+            <div class="explore-chips-bar">
+                ${exploreGenres.map(g => `
+                    <a href="#search/${encodeURIComponent(g)}" class="explore-chip">
+                        <i class="fas fa-hashtag" style="font-size: 11px; opacity: 0.6;"></i> ${g}
+                    </a>
+                `).join('')}
+            </div>
+
+            <!-- Quick Radar Cards -->
+            <div class="explore-radar-grid">
+                <div class="explore-radar-card radar-releases" onclick="window.location.hash='#new-releases'">
+                    <div class="radar-icon-box"><i class="fas fa-compact-disc"></i></div>
+                    <div class="radar-title">New Releases</div>
+                    <div class="radar-desc">Fresh drops & latest albums</div>
+                </div>
+                <div class="explore-radar-card radar-charts" onclick="document.getElementById('sec-trending')?.scrollIntoView({behavior: 'smooth'})">
+                    <div class="radar-icon-box"><i class="fas fa-fire-flame-curved"></i></div>
+                    <div class="radar-title">Top Charts</div>
+                    <div class="radar-desc">Trending songs & viral hits</div>
+                </div>
+                <div class="explore-radar-card radar-moods" onclick="document.getElementById('sec-moods')?.scrollIntoView({behavior: 'smooth'})">
+                    <div class="radar-icon-box"><i class="fas fa-headphones"></i></div>
+                    <div class="radar-title">Moods & Moments</div>
+                    <div class="radar-desc">Vibes for any moment</div>
+                </div>
+                <div class="explore-radar-card radar-artists" onclick="document.getElementById('sec-artists')?.scrollIntoView({behavior: 'smooth'})">
+                    <div class="radar-icon-box"><i class="fas fa-users-viewfinder"></i></div>
+                    <div class="radar-title">Global Artists</div>
+                    <div class="radar-desc">Most streamed performers</div>
+                </div>
+            </div>
+        `;
+
+        // Section: Top Charts & Trending Hits
+        if (trending.length > 0) {
+            html += `
+            <div class="explore-section" id="sec-trending">
+                <div class="explore-section-header">
+                    <div class="explore-section-title">
+                        <i class="fas fa-chart-line"></i> Trending Hits
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button class="btn-primary" style="padding: 6px 14px; font-size: 12px; border-radius: 20px;" onclick="playList(window.exploreTrendingSongs)">
+                            <i class="fas fa-play" style="margin-right: 6px;"></i> Play All
+                        </button>
+                    </div>
+                </div>
+                <div class="trending-songs-grid">
+                    ${trending.slice(0, 10).map((song, idx) => {
+                        const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : ''));
+                        const img = (song.image && song.image.length > 0) ? song.image[song.image.length - 1].url : 'https://via.placeholder.com/150';
+                        const artists = (song.artists && song.artists.primary) ? song.artists.primary.map(a => a.name).join(', ') : (song.subtitle || 'Unknown Artist');
+                        const isFav = favoriteSongs.some(f => f.id === song.id);
+                        return `
+                        <div class="trending-song-row" onclick="playSingleTrack('${song.id}')">
+                            <div class="trending-rank ${rankClass}">#${idx + 1}</div>
+                            <div class="trending-thumb-wrapper">
+                                <img src="${img}" alt="${song.name || song.title}" loading="lazy">
+                                <div class="trending-play-overlay">
+                                    <i class="fas fa-play"></i>
+                                </div>
+                            </div>
+                            <div class="trending-song-info">
+                                <div class="trending-song-title">${song.name || song.title}</div>
+                                <div class="trending-song-artist">${artists}</div>
+                            </div>
+                            <div class="trending-song-actions" onclick="event.stopPropagation()">
+                                <i class="${isFav ? 'fas' : 'far'} fa-heart" 
+                                   style="cursor: pointer; font-size: 14px; color: ${isFav ? 'var(--accent)' : 'var(--text-secondary)'};" 
+                                   onclick="toggleFavoriteTrack('${song.id}', this)"
+                                   title="Favorite"></i>
+                                <i class="fas fa-plus" 
+                                   style="cursor: pointer; font-size: 13px; color: var(--text-secondary);" 
+                                   onclick="window.openAddToPlaylistModal('${song.id}')"
+                                   title="Add to Playlist"></i>
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            `;
+        }
+
+        // Section: New Releases Shelf
+        if (newReleases.length > 0) {
+            html += `
+            <div class="explore-section" id="sec-releases">
+                <div class="explore-section-header">
+                    <div class="explore-section-title">
+                        <i class="fas fa-compact-disc"></i> New Releases
+                    </div>
+                    <a href="#new-releases" class="explore-section-action">See All <i class="fas fa-chevron-right" style="font-size: 11px;"></i></a>
+                </div>
+                <div class="explore-shelf">
+                    ${newReleases.slice(0, 12).map(album => {
+                        const img = (album.image && album.image.length > 0) ? album.image[album.image.length - 1].url : 'https://via.placeholder.com/150';
+                        const artists = (album.artists && album.artists.primary) ? album.artists.primary.map(a => a.name).join(', ') : 'Unknown Artist';
+                        return `
+                        <div class="album-card" onclick="window.location.hash='#album/${album.id}'" style="cursor: pointer; width: 150px; flex-shrink: 0;">
+                            <div class="card-img-wrapper" style="width: 150px; height: 150px; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.12); margin-bottom: 10px; position: relative;">
+                                <img src="${img}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy">
+                                <span style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; text-transform: uppercase;">
+                                    ${album.type || 'Album'}
+                                </span>
+                            </div>
+                            <div class="card-title" style="font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${album.name || album.title}</div>
+                            <div class="card-subtitle" style="font-size: 12px; color: var(--text-secondary); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${artists}</div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            `;
+        }
+
+        // Section: Moods & Moments (Curated from Android AirBeats)
+        if (moods.length > 0) {
+            const moodIcons = {
+                'Chill': 'fa-mug-hot',
+                'Commute': 'fa-car-side',
+                'Energy Boost': 'fa-bolt',
+                'Feel Good': 'fa-face-smile',
+                'Focus': 'fa-brain',
+                'Party': 'fa-champagne-glasses',
+                'Romance': 'fa-heart',
+                'Sad': 'fa-cloud-rain',
+                'Sleep': 'fa-moon',
+                'Workout': 'fa-dumbbell',
+                '1980s': 'fa-radio',
+                '1990s': 'fa-cassette-tape',
+                '2000s': 'fa-compact-disc'
+            };
+            html += `
+            <div class="explore-section" id="sec-moods">
+                <div class="explore-section-header">
+                    <div class="explore-section-title">
+                        <i class="fas fa-masks-theater"></i> Moods & Moments
+                    </div>
+                </div>
+                <div class="mood-cards-grid">
+                    ${moods.map(m => {
+                        const icon = moodIcons[m.title] || 'fa-music';
+                        return `
+                        <div class="mood-card" onclick="window.openMoodCategory('${encodeURIComponent(m.params)}', '${encodeURIComponent(m.title)}')">
+                            <i class="fas ${icon}" style="font-size: 18px; color: var(--accent); margin-right: 12px; z-index: 1;"></i>
+                            <div class="mood-card-title">${m.title}</div>
+                            <i class="fas ${icon} mood-card-decor"></i>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            `;
+        }
+
+        // Section: Top Charts Playlists
+        if (topCharts.length > 0) {
+            html += `
+            <div class="explore-section" id="sec-chart-playlists">
+                <div class="explore-section-header">
+                    <div class="explore-section-title">
+                        <i class="fas fa-trophy"></i> Chart Playlists
+                    </div>
+                </div>
+                <div class="explore-shelf">
+                    ${topCharts.map(pl => `
+                        <div class="album-card" onclick="window.location.hash='#playlist/${pl.id}'" style="cursor: pointer; width: 160px; flex-shrink: 0;">
+                            <div class="card-img-wrapper" style="width: 160px; height: 160px; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.12); margin-bottom: 10px;">
+                                <img src="${pl.image || 'https://via.placeholder.com/150'}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy">
+                            </div>
+                            <div class="card-title" style="font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${pl.title}</div>
+                            <div class="card-subtitle" style="font-size: 12px; color: var(--text-secondary); margin-top: 3px;">Official YouTube Music Chart</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            `;
+        }
+
+        // Section: Browse by Genre
+        if (genres.length > 0) {
+            html += `
+            <div class="explore-section" id="sec-genres">
+                <div class="explore-section-header">
+                    <div class="explore-section-title">
+                        <i class="fas fa-shapes"></i> Browse by Genre
+                    </div>
+                </div>
+                <div class="mood-cards-grid">
+                    ${genres.map(g => `
+                        <div class="mood-card" onclick="window.openMoodCategory('${encodeURIComponent(g.params)}', '${encodeURIComponent(g.title)}')">
+                            <i class="fas fa-guitar" style="font-size: 18px; color: var(--accent); margin-right: 12px; z-index: 1;"></i>
+                            <div class="mood-card-title">${g.title}</div>
+                            <i class="fas fa-guitar mood-card-decor"></i>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            `;
+        }
+
+        // Section: Top Global Artists
+        if (topArtists.length > 0) {
+            html += `
+            <div class="explore-section" id="sec-artists">
+                <div class="explore-section-header">
+                    <div class="explore-section-title">
+                        <i class="fas fa-microphone-lines"></i> Top Artists
+                    </div>
+                </div>
+                <div class="explore-shelf">
+                    ${topArtists.map(artist => {
+                        const img = (artist.image && artist.image.length > 0) ? artist.image[artist.image.length - 1].url : 'https://via.placeholder.com/150';
+                        return `
+                        <div class="artist-card" onclick="window.location.hash='#artist/${artist.id}'" style="cursor: pointer; width: 130px; flex-shrink: 0; text-align: center;">
+                            <div class="card-img-wrapper" style="width: 120px; height: 120px; border-radius: 50%; overflow: hidden; margin: 0 auto 10px auto; box-shadow: 0 8px 20px rgba(0,0,0,0.15);">
+                                <img src="${img}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy">
+                            </div>
+                            <div class="card-title" style="font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${artist.name}</div>
+                            <div class="card-subtitle" style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">${artist.subscribers ? artist.subscribers + ' subs' : 'Artist'}</div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            `;
+        }
+
+        html += `</div>`; // Close explore-container
+        routerView.innerHTML = html;
+    } catch (e) {
+        console.error('Explore error:', e);
+        routerView.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; text-align: center; color: var(--text-secondary);">
+            <i class="fas fa-compass" style="font-size: 64px; margin-bottom: 20px; opacity: 0.5;"></i>
+            <h2 style="color: var(--text-primary); margin-bottom: 10px;">Failed to load Explore</h2>
+            <p>${e.message || 'An error occurred while fetching explore content.'}</p>
+            <button class="btn-primary" onclick="renderExplore()" style="margin-top: 20px;">Retry</button>
+        </div>`;
+    } finally {
+        globalLoading.style.display = 'none';
+    }
+};
+
+window.openMoodCategory = function(encodedParams, encodedTitle) {
+    const params = decodeURIComponent(encodedParams);
+    const title = decodeURIComponent(encodedTitle);
+    window.location.hash = `#mood/${encodeURIComponent(params)}?title=${encodeURIComponent(title)}`;
+};
+
+window.renderMoodCategory = async function(id) {
+    globalLoading.style.display = 'flex';
+    routerView.innerHTML = '';
+
+    let params = id || '';
+    let title = 'Curated Mood';
+    if (params.includes('?')) {
+        const parts = params.split('?');
+        params = decodeURIComponent(parts[0]);
+        const urlParams = new URLSearchParams(parts[1]);
+        if (urlParams.get('title')) title = decodeURIComponent(urlParams.get('title'));
+    } else {
+        params = decodeURIComponent(params);
+    }
+
+    try {
+        const res = await fetch(`/api/mood_playlists?params=${encodeURIComponent(params)}&title=${encodeURIComponent(title)}`);
+        const data = await res.json();
+
+        if (!data.success || !data.data) {
+            throw new Error(data.error || 'Failed to fetch playlists');
+        }
+
+        const playlists = data.data;
+
+        let html = `
+        <div class="explore-container">
+            <div class="back-btn" onclick="history.back()" title="Go Back"><i class="fas fa-arrow-left"></i></div>
+            <div class="hero-header" style="margin-bottom: 30px;">
+                <div class="hero-info">
+                    <div class="hero-title">${title} Playlists</div>
+                    <div class="hero-meta">Curated YouTube Music playlists & stations for ${title}</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 20px; margin-bottom: 40px;">
+                ${playlists.map(pl => {
+                    const img = (pl.image && pl.image.length > 0) ? pl.image[pl.image.length - 1].url : 'https://via.placeholder.com/150';
+                    return `
+                    <div class="album-card" onclick="window.location.hash='#playlist/${pl.id}'" style="cursor: pointer; width: 100%;">
+                        <div class="card-img-wrapper" style="width: 100%; aspect-ratio: 1/1; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.12); margin-bottom: 10px; position: relative;">
+                            <img src="${img}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy">
+                            <div class="trending-play-overlay">
+                                <i class="fas fa-play"></i>
+                            </div>
+                        </div>
+                        <div class="card-title" style="font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${pl.title || pl.name}</div>
+                        <div class="card-subtitle" style="font-size: 12px; color: var(--text-secondary); margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${pl.description || 'Curated Playlist'}</div>
+                    </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+        `;
+        routerView.innerHTML = html;
+    } catch (e) {
+        console.error('Mood category error:', e);
+        routerView.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; text-align: center; color: var(--text-secondary);">
+            <div class="back-btn" onclick="history.back()" title="Go Back" style="margin-bottom: 20px;"><i class="fas fa-arrow-left"></i></div>
+            <h2 style="color: var(--text-primary); margin-bottom: 10px;">Failed to load ${title} playlists</h2>
+            <p>${e.message || 'An error occurred.'}</p>
+            <button class="btn-primary" onclick="renderMoodCategory('${id}')" style="margin-top: 20px;">Retry</button>
+        </div>`;
+    } finally {
+        globalLoading.style.display = 'none';
+    }
+};
 
 window.renderNewReleases = async function() {
     let html = `

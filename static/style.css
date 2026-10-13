@@ -3676,3 +3676,322 @@ body.right-panel-collapsed .main-content {
     from { opacity: 0; transform: translateX(20px); }
     to { opacity: 1; transform: translateX(0); }
 }
+
+/* ==========================================================================
+   EXPLORE SCREEN (AIRBEATS ANDROID STYLE)
+   ========================================================================== */
+.explore-container {
+    padding: 10px 0 60px 0;
+    max-width: 100%;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.explore-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding: 0 4px;
+}
+
+.explore-hero-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.8px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.explore-hero-title i {
+    color: var(--accent);
+    font-size: 28px;
+}
+
+.explore-hero-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Category Filter Chips Bar */
+.explore-chips-bar {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 4px 4px 16px 4px;
+    margin-bottom: 24px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+.explore-chips-bar::-webkit-scrollbar {
+    display: none;
+}
+.explore-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    border-radius: 50px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.explore-chip:hover {
+    background: var(--sidebar-active);
+    color: var(--accent);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+/* Quick Radar Cards */
+.explore-radar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 36px;
+}
+.explore-radar-card {
+    position: relative;
+    padding: 20px;
+    border-radius: 20px;
+    background: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+.explore-radar-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+}
+.explore-radar-card.radar-releases {
+    background: linear-gradient(135deg, rgba(142, 68, 173, 0.22) 0%, var(--card-bg) 100%);
+    border-color: rgba(142, 68, 173, 0.3);
+}
+.explore-radar-card.radar-charts {
+    background: linear-gradient(135deg, rgba(230, 126, 34, 0.22) 0%, var(--card-bg) 100%);
+    border-color: rgba(230, 126, 34, 0.3);
+}
+.explore-radar-card.radar-moods {
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.22) 0%, var(--card-bg) 100%);
+    border-color: rgba(46, 204, 113, 0.3);
+}
+.explore-radar-card.radar-artists {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.22) 0%, var(--card-bg) 100%);
+    border-color: rgba(52, 152, 219, 0.3);
+}
+.radar-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-bottom: 14px;
+    background: rgba(255, 255, 255, 0.08);
+}
+.radar-releases .radar-icon-box { color: #af7ac5; }
+.radar-charts .radar-icon-box { color: #f39c12; }
+.radar-moods .radar-icon-box { color: #2ecc71; }
+.radar-artists .radar-icon-box { color: #3498db; }
+
+.radar-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.radar-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Section Header */
+.explore-section {
+    margin-bottom: 40px;
+}
+.explore-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    padding: 0 4px;
+}
+.explore-section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.explore-section-title i {
+    font-size: 18px;
+    color: var(--accent);
+}
+.explore-section-action {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.explore-section-action:hover {
+    color: var(--accent);
+}
+
+/* Trending Songs Grid (2-column list) */
+.trending-songs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 12px;
+}
+.trending-song-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.trending-song-row:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(4px);
+}
+.trending-rank {
+    width: 28px;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+.trending-rank.rank-1 { color: #f1c40f; }
+.trending-rank.rank-2 { color: #bdc3c7; }
+.trending-rank.rank-3 { color: #e67e22; }
+.trending-thumb-wrapper {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-right: 14px;
+    flex-shrink: 0;
+}
+.trending-thumb-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.trending-play-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    color: #fff;
+    font-size: 14px;
+}
+.trending-song-row:hover .trending-play-overlay {
+    opacity: 1;
+}
+.trending-song-info {
+    flex: 1;
+    min-width: 0;
+}
+.trending-song-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.trending-song-artist {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.trending-song-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+/* Mood & Genre Cards Grid */
+.mood-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+}
+.mood-card {
+    position: relative;
+    height: 64px;
+    border-radius: 16px;
+    background: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    padding: 0 18px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+.mood-card:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    border-color: var(--accent);
+}
+.mood-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 1;
+}
+.mood-card-decor {
+    position: absolute;
+    right: -10px;
+    bottom: -10px;
+    font-size: 40px;
+    opacity: 0.12;
+    transform: rotate(15deg);
+    color: var(--accent);
+}
+
+/* Horizontal Shelf for Albums / Playlists */
+.explore-shelf {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    scrollbar-width: none;
+}
+.explore-shelf::-webkit-scrollbar {
+    display: none;
+}

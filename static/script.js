@@ -2856,9 +2856,9 @@ async function renderSettingsBackup() {
                         <div id="backup-dropzone" style="border: 2px dashed rgba(255,255,255,0.18); border-radius: 12px; padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.25s ease;" onclick="document.getElementById('androidBackupInput').click()">
                             <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: #1ed760; margin-bottom: 12px; display: block; opacity: 0.9;"></i>
                             <div style="font-weight: 600; font-size: 16px; margin-bottom: 6px; color: var(--text-primary);">Click or drag & drop your .backup file here</div>
-                            <div style="color: var(--text-secondary); font-size: 13px;">Supports AirBeats .backup and .zip backup archives</div>
+                            <div style="color: var(--text-secondary); font-size: 13px;">Supports AirBeats .backup, .zip, and .json archives</div>
                         </div>
-                        <input type="file" id="androidBackupInput" accept=".backup,.zip" style="display: none;" onchange="window.handleBackupUpload(this)">
+                        <input type="file" id="androidBackupInput" accept=".backup,.zip,.json" style="display: none;" onchange="window.handleBackupUpload(this)">
 
                         <div id="backup-status" style="margin-top: 18px; display: none; font-size: 14px; padding: 14px 18px; border-radius: 10px; font-weight: 500;"></div>
                     </div>
@@ -2927,12 +2927,12 @@ window.handleBackupUpload = async function(input) {
     const file = input.files[0];
     const statusDiv = document.getElementById('backup-status');
     
-    if (!file.name.endsWith('.backup') && !file.name.endsWith('.zip')) {
+    if (!file.name.endsWith('.backup') && !file.name.endsWith('.zip') && !file.name.endsWith('.json')) {
         if (statusDiv) {
             statusDiv.style.display = 'block';
             statusDiv.style.background = 'rgba(255, 68, 68, 0.12)';
             statusDiv.style.color = '#ff4444';
-            statusDiv.innerHTML = '<i class="fas fa-times-circle"></i> Please select a valid AirBeats <code>.backup</code> or <code>.zip</code> file.';
+            statusDiv.innerHTML = '<i class="fas fa-times-circle"></i> Please select a valid AirBeats <code>.backup</code>, <code>.zip</code>, or <code>.json</code> file.';
         }
         return;
     }
@@ -4629,8 +4629,25 @@ window.StatsEngine = {
         `;
     },
 
+    cleanStr: function(v) {
+        if (!v) return '';
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object') return v.title || v.name || v.text || '';
+        return String(v);
+    },
+
+    escApos: function(v) {
+        return this.cleanStr(v).replace(/'/g, "\\'");
+    },
+
+    escQuot: function(v) {
+        return this.cleanStr(v).replace(/"/g, '&quot;');
+    },
+
     getSongPlaceholderSvg: function(title, artist) {
-        const str = (title || '') + (artist || '');
+        const cleanT = this.cleanStr(title);
+        const cleanA = this.cleanStr(artist);
+        const str = cleanT + cleanA;
         const colors = [
             ['#1db954', '#121212'],
             ['#8b5cf6', '#3b82f6'],
@@ -4663,6 +4680,9 @@ window.StatsEngine = {
     pendingSongFetches: new Set(),
 
     fetchSongImageAsync: async function(title, artist, songId) {
+        title = this.cleanStr(title);
+        artist = this.cleanStr(artist);
+        songId = this.cleanStr(songId);
         if (!title) return;
         const key = songId || `${title}_${artist}`;
         if (this.pendingSongFetches.has(key)) return;
@@ -4672,14 +4692,14 @@ window.StatsEngine = {
             let foundImg = '';
             // 1. Check window.allTracks
             if (window.allTracks && Array.isArray(window.allTracks)) {
-                const match = window.allTracks.find(t => t && (t.id === songId || (t.title && t.title.toLowerCase() === title.toLowerCase())));
+                const match = window.allTracks.find(t => t && (t.id === songId || (t.title && this.cleanStr(t.title).toLowerCase() === title.toLowerCase())));
                 if (match && match.image) foundImg = getHighestQualityImage(match.image);
             }
             // 2. Check playHistory
             if (!foundImg || foundImg.includes('placeholder') || foundImg.includes('ui-avatars')) {
                 try {
                     const hist = JSON.parse(localStorage.getItem('playHistory') || '[]');
-                    const match = hist.find(t => t && (t.id === songId || (t.title && t.title.toLowerCase() === title.toLowerCase())));
+                    const match = hist.find(t => t && (t.id === songId || (t.title && this.cleanStr(t.title).toLowerCase() === title.toLowerCase())));
                     if (match && match.image) foundImg = getHighestQualityImage(match.image);
                 } catch(e) {}
             }
@@ -4701,7 +4721,7 @@ window.StatsEngine = {
                     let events = JSON.parse(localStorage.getItem('airbeats_stats_events') || '[]');
                     let updated = false;
                     events.forEach(e => {
-                        if (e && (e.songId === songId || (e.title && e.title.toLowerCase() === title.toLowerCase()))) {
+                        if (e && (e.songId === songId || (e.title && this.cleanStr(e.title).toLowerCase() === title.toLowerCase()))) {
                             e.image = foundImg;
                             updated = true;
                         }
@@ -4757,7 +4777,8 @@ window.StatsEngine = {
     },
 
     getArtistPlaceholderSvg: function(name) {
-        const initial = (name ? name.trim().charAt(0) : 'A').toUpperCase();
+        const cleanN = this.cleanStr ? this.cleanStr(name) : (name || '');
+        const initial = (cleanN ? cleanN.trim().charAt(0) : 'A').toUpperCase();
         const colors = [
             ['#ec4899', '#8b5cf6'],
             ['#3b82f6', '#06b6d4'],
@@ -4767,7 +4788,7 @@ window.StatsEngine = {
             ['#00c6ff', '#0072ff']
         ];
         let hash = 0;
-        for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        for (let i = 0; i < (cleanN || '').length; i++) hash = cleanN.charCodeAt(i) + ((hash << 5) - hash);
         const [c1, c2] = colors[Math.abs(hash) % colors.length];
         const gradId = `art_svg_${Math.abs(hash)}`;
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#${gradId})"/><text x="50" y="58" font-size="42" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`;
@@ -4777,6 +4798,8 @@ window.StatsEngine = {
     pendingArtistFetches: new Set(),
 
     fetchArtistImageAsync: async function(artistName, artistId) {
+        artistName = this.cleanStr ? this.cleanStr(artistName) : (artistName || '');
+        artistId = this.cleanStr ? this.cleanStr(artistId) : (artistId || '');
         if (!artistName || artistName === 'Unknown Artist') return;
         const key = artistId || artistName;
         if (this.pendingArtistFetches.has(key)) return;
@@ -4830,6 +4853,18 @@ window.StatsEngine = {
         if (Array.isArray(events) && events.length > 0) {
             events.forEach(ev => {
                 if (!ev) return;
+                if (ev.album && typeof ev.album === 'object') {
+                    ev.album = ev.album.title || ev.album.name || ev.album.text || '';
+                    updatedCount++;
+                }
+                if (ev.title && typeof ev.title === 'object') {
+                    ev.title = ev.title.title || ev.title.name || ev.title.text || '';
+                    updatedCount++;
+                }
+                if (ev.artist && typeof ev.artist === 'object') {
+                    ev.artist = ev.artist.name || ev.artist.title || '';
+                    updatedCount++;
+                }
                 const songId = ev.songId || (ev.id && ev.id.startsWith('seed_') ? ev.id.split('_')[1] : ev.id);
                 const isBrokenYt = ev.image && ev.image.includes('ytimg.com') && (!songId || !/^[a-zA-Z0-9_-]{11}$/.test(songId));
                 if (!ev.image || ev.image.includes('ui-avatars.com') || ev.image.includes('placeholder') || isBrokenYt) {
@@ -4869,16 +4904,21 @@ window.StatsEngine = {
                     const songImg = this.getSongThumbnail(t.id, rawSongImg, t.title || t.name, artName);
                     const artImg = (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].image) || this.getArtistImage(artName, artId, '');
 
+                    const sTitle = this.cleanStr(t.title || t.name || 'Unknown Track');
+                    const sArt = this.cleanStr(artName);
+                    const sAlb = this.cleanStr((t.album && (t.album.title || t.album.name || t.album)) || '');
+                    const sAlbId = this.cleanStr((t.album && t.album.id) || '');
+
                     for (let c = 0; c < playCount; c++) {
                         events.push({
                             id: `seed_${t.id}_${c}`,
                             songId: t.id,
-                            title: t.title || t.name || 'Unknown Track',
-                            artist: artName,
+                            title: sTitle,
+                            artist: sArt,
                             artistId: artId,
                             artistImage: artImg || '',
-                            album: (t.album && (t.album.title || t.album.name || t.album)) || '',
-                            albumId: (t.album && t.album.id) || '',
+                            album: sAlb,
+                            albumId: sAlbId,
                             image: songImg,
                             duration: dur,
                             timeListenedMs: dur * 1000,
@@ -4912,12 +4952,12 @@ window.StatsEngine = {
         const newEvent = {
             id: `ev_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             songId: track.id,
-            title: track.title || track.name || 'Unknown Track',
-            artist: artName,
+            title: this.cleanStr(track.title || track.name || 'Unknown Track'),
+            artist: this.cleanStr(artName),
             artistId: artId,
             artistImage: artImg || '',
-            album: (track.album && (track.album.title || track.album.name || track.album)) || '',
-            albumId: (track.album && track.album.id) || '',
+            album: this.cleanStr((track.album && (track.album.title || track.album.name || track.album)) || ''),
+            albumId: this.cleanStr((track.album && track.album.id) || ''),
             image: songImg,
             duration: dur,
             timeListenedMs: validMs,
@@ -4962,9 +5002,13 @@ window.StatsEngine = {
         
         let addedCount = 0;
         importedEvents.forEach(ev => {
+            if (!ev) return;
+            ev.title = this.cleanStr(ev.title || 'Unknown Track');
+            ev.artist = this.cleanStr(ev.artist || 'Unknown Artist');
+            ev.album = this.cleanStr(ev.album || '');
             const songId = ev.songId || (ev.id && ev.id.startsWith('seed_') ? ev.id.split('_')[1] : ev.id);
             if (!ev.image || ev.image.includes('ui-avatars.com') || ev.image.includes('placeholder')) {
-                ev.image = this.getSongThumbnail(songId, ev.image);
+                ev.image = this.getSongThumbnail(songId, ev.image, ev.title, ev.artist);
             }
             if (ev.artistImage && !ev.artistImage.includes('ui-avatars.com')) {
                 this.setCachedArtistImage(ev.artist, ev.artistId, ev.artistImage);
@@ -5143,14 +5187,18 @@ window.StatsEngine = {
             }
 
             // Albums
-            const albumName = ev.album || '';
-            if (albumName) {
+            let albumName = '';
+            if (typeof ev.album === 'string') albumName = ev.album;
+            else if (ev.album && typeof ev.album === 'object') albumName = ev.album.title || ev.album.name || ev.album.text || '';
+            albumName = String(albumName || '').trim();
+            if (albumName && albumName !== '[object Object]') {
                 if (!albumMap.has(albumName)) {
-                    const albImg = (ev.image && !ev.image.includes('ui-avatars') && !ev.image.includes('placeholder')) ? getHighestQualityImage(ev.image) : this.getSongThumbnail(songId, ev.image, albumName, ev.artist);
+                    const albArtist = typeof ev.artist === 'string' ? ev.artist : (ev.artist && (ev.artist.name || ev.artist.title) ? (ev.artist.name || ev.artist.title) : '');
+                    const albImg = (ev.image && !ev.image.includes('ui-avatars') && !ev.image.includes('placeholder')) ? getHighestQualityImage(ev.image) : this.getSongThumbnail(songId, ev.image, albumName, albArtist);
                     albumMap.set(albumName, {
                         id: ev.albumId || albumName,
                         title: albumName,
-                        artist: ev.artist || '',
+                        artist: albArtist,
                         image: albImg,
                         playCount: 0,
                         totalListenMs: 0
@@ -5204,6 +5252,10 @@ window.currentStatsMode = 'continuous';
 window.currentStatsChipIndex = 5; // Default: All Time
 
 async function renderStats() {
+    const cleanStr = (v) => window.StatsEngine.cleanStr(v);
+    const escApos = (v) => window.StatsEngine.escApos(v);
+    const escQuot = (v) => window.StatsEngine.escQuot(v);
+
     const events = window.StatsEngine.getEvents();
     const profile = window.StatsEngine.getProfile();
     const totalAllTimeHours = window.StatsEngine.getTotalHours();
@@ -5397,24 +5449,26 @@ async function renderStats() {
                 <div class="stats-chart-list">
                     ${top5.map((s, idx) => {
                         const fillPercent = Math.max(10, Math.round((s.playCount / maxPlays) * 100));
-                        const safeTitle = (s.title || '').replace(/'/g, "\\'");
-                        const safeArtist = (s.artist || '').replace(/'/g, "\\'");
+                        const sTitle = cleanStr(s.title);
+                        const sArtist = cleanStr(s.artist);
+                        const safeTitle = escApos(sTitle);
+                        const safeArtist = escApos(sArtist);
                         return `
                         <div class="stats-chart-row" onclick="window.playSingleTrack('${s.id}')">
                             <span class="stats-chart-rank" style="${idx === 0 ? 'color: #ffd700;' : (idx === 1 ? 'color: #c0c0c0;' : (idx === 2 ? 'color: #cd7f32;' : ''))}">#${idx + 1}</span>
                             <div class="stats-chart-thumb-wrap">
                                 <img src="${getHighestQualityImage(s.image)}" 
                                      data-song-id="${s.id}" 
-                                     data-song-title="${(s.title || '').replace(/"/g, '&quot;')}" 
-                                     data-song-artist="${(s.artist || '').replace(/"/g, '&quot;')}" 
+                                     data-song-title="${escQuot(sTitle)}" 
+                                     data-song-artist="${escQuot(sArtist)}" 
                                      onload="if(this.naturalWidth<=120&&this.naturalHeight<=90){this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');}" 
-                                     onerror="this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');" 
+                                     onerror="this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');}" 
                                      class="stats-chart-thumb" 
-                                     alt="${s.title}">
+                                     alt="${escQuot(sTitle)}">
                             </div>
                             <div class="stats-chart-info">
-                                <div class="stats-chart-song-title" title="${s.title}">${s.title}</div>
-                                <div class="stats-chart-song-artist" title="${s.artist}">${s.artist}</div>
+                                <div class="stats-chart-song-title" title="${escQuot(sTitle)}">${sTitle}</div>
+                                <div class="stats-chart-song-artist" title="${escQuot(sArtist)}">${sArtist}</div>
                             </div>
                             <div class="stats-bar-track">
                                 <div class="stats-bar-fill" style="width: ${fillPercent}%;"></div>
@@ -5441,25 +5495,27 @@ async function renderStats() {
                 ${agg.topSongs.length > 0 ? `
                     <div class="stats-shelf-grid">
                         ${agg.topSongs.slice(0, 12).map((s, idx) => {
-                            const safeTitle = (s.title || '').replace(/'/g, "\\'");
-                            const safeArtist = (s.artist || '').replace(/'/g, "\\'");
+                            const sTitle = cleanStr(s.title);
+                            const sArtist = cleanStr(s.artist);
+                            const safeTitle = escApos(sTitle);
+                            const safeArtist = escApos(sArtist);
                             return `
                             <div class="stats-item-card" onclick="window.playSingleTrack('${s.id}')">
                                 <div class="stats-item-thumb-wrap">
                                     <img src="${getHighestQualityImage(s.image)}" 
                                          data-song-id="${s.id}" 
-                                         data-song-title="${(s.title || '').replace(/"/g, '&quot;')}" 
-                                         data-song-artist="${(s.artist || '').replace(/"/g, '&quot;')}" 
+                                         data-song-title="${escQuot(sTitle)}" 
+                                         data-song-artist="${escQuot(sArtist)}" 
                                          onload="if(this.naturalWidth<=120&&this.naturalHeight<=90){this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');}" 
                                          onerror="this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');" 
                                          class="stats-item-thumb" 
-                                         alt="${s.title}">
+                                         alt="${escQuot(sTitle)}">
                                     <div class="stats-item-play-overlay">
                                         <div class="stats-item-play-btn"><i class="fas fa-play"></i></div>
                                     </div>
                                 </div>
-                                <div class="stats-item-title" title="${s.title}">${idx + 1}. ${s.title}</div>
-                                <div class="stats-item-sub" title="${s.artist}">${s.artist}</div>
+                                <div class="stats-item-title" title="${escQuot(sTitle)}">${idx + 1}. ${sTitle}</div>
+                                <div class="stats-item-sub" title="${escQuot(sArtist)}">${sArtist}</div>
                                 <span class="stats-item-count-badge">${s.playCount} plays • ${window.StatsEngine.formatTime(s.totalListenMs)}</span>
                             </div>
                             `;
@@ -5478,18 +5534,19 @@ async function renderStats() {
                 ${agg.topArtists.length > 0 ? `
                     <div class="stats-shelf-grid">
                         ${agg.topArtists.slice(0, 12).map((a, idx) => {
-                            const safeName = (a.name || '').replace(/'/g, "\\'");
+                            const aName = cleanStr(a.name);
+                            const safeName = escApos(aName);
                             return `
                             <div class="stats-item-card" onclick="location.hash='#artist/${a.id}'">
                                 <div class="stats-item-thumb-wrap round">
                                     <img src="${getHighestQualityImage(a.image)}" 
-                                         data-artist-name="${(a.name || '').replace(/"/g, '&quot;')}" 
+                                         data-artist-name="${escQuot(aName)}" 
                                          data-artist-id="${a.id}" 
                                          onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${safeName}');window.StatsEngine.fetchArtistImageAsync('${safeName}','${a.id}');}" 
                                          class="stats-item-thumb" 
-                                         alt="${a.name}">
+                                         alt="${escQuot(aName)}">
                                 </div>
-                                <div class="stats-item-title" style="text-align: center;">${idx + 1}. ${a.name}</div>
+                                <div class="stats-item-title" style="text-align: center;">${idx + 1}. ${aName}</div>
                                 <div style="text-align: center;">
                                     <span class="stats-item-count-badge">${a.playCount} plays • ${window.StatsEngine.formatTime(a.totalListenMs)}</span>
                                 </div>
@@ -5510,18 +5567,20 @@ async function renderStats() {
                 ${agg.topAlbums.length > 0 ? `
                     <div class="stats-shelf-grid">
                         ${agg.topAlbums.slice(0, 12).map((alb, idx) => {
-                            const safeAlbTitle = (alb.title || '').replace(/'/g, "\\'");
-                            const safeAlbArtist = (alb.artist || '').replace(/'/g, "\\'");
+                            const albTitle = cleanStr(alb.title);
+                            const albArtist = cleanStr(alb.artist);
+                            const safeAlbTitle = escApos(albTitle);
+                            const safeAlbArtist = escApos(albArtist);
                             return `
                             <div class="stats-item-card" onclick="location.hash='#album/${alb.id}'">
                                 <div class="stats-item-thumb-wrap">
                                     <img src="${getHighestQualityImage(alb.image)}" 
                                          onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getSongPlaceholderSvg('${safeAlbTitle}','${safeAlbArtist}');}" 
                                          class="stats-item-thumb" 
-                                         alt="${alb.title}">
+                                         alt="${escQuot(albTitle)}">
                                 </div>
-                                <div class="stats-item-title" title="${alb.title}">${idx + 1}. ${alb.title}</div>
-                                <div class="stats-item-sub" title="${alb.artist}">${alb.artist}</div>
+                                <div class="stats-item-title" title="${escQuot(albTitle)}">${idx + 1}. ${albTitle}</div>
+                                <div class="stats-item-sub" title="${escQuot(albArtist)}">${albArtist}</div>
                                 <span class="stats-item-count-badge">${alb.playCount} plays • ${window.StatsEngine.formatTime(alb.totalListenMs)}</span>
                             </div>
                             `;
@@ -5541,8 +5600,10 @@ async function renderStats() {
     // Auto-fetch authentic covers for any songs currently using placeholder or broken YouTube
     if (agg.topSongs && agg.topSongs.length > 0) {
         agg.topSongs.slice(0, 12).forEach(s => {
+            const sTitle = cleanStr(s.title);
+            const sArtist = cleanStr(s.artist);
             if (!s.image || s.image.startsWith('data:image/svg') || s.image.includes('placeholder') || (s.image.includes('ytimg.com') && !/^[a-zA-Z0-9_-]{11}$/.test(s.id))) {
-                window.StatsEngine.fetchSongImageAsync(s.title, s.artist, s.id);
+                window.StatsEngine.fetchSongImageAsync(sTitle, sArtist, s.id);
             }
         });
     }
@@ -5550,8 +5611,9 @@ async function renderStats() {
     // Auto-fetch authentic artist photos for any visible artists currently using placeholder
     if (agg.topArtists && agg.topArtists.length > 0) {
         agg.topArtists.slice(0, 12).forEach(a => {
+            const aName = cleanStr(a.name);
             if (!a.image || a.image.startsWith('data:image/svg') || a.image.includes('placeholder')) {
-                window.StatsEngine.fetchArtistImageAsync(a.name, a.id);
+                window.StatsEngine.fetchArtistImageAsync(aName, a.id);
             }
         });
     }
@@ -5584,6 +5646,10 @@ window.shuffleMostPlayedStats = function() {
    AIRBEATS INSIGHT MODAL ("Discover Your Musical Year / Journey")
    ========================================================================== */
 window.openInsightModal = function() {
+    const cleanStr = (v) => window.StatsEngine.cleanStr(v);
+    const escApos = (v) => window.StatsEngine.escApos(v);
+    const escQuot = (v) => window.StatsEngine.escQuot(v);
+
     const events = window.StatsEngine.getEvents();
     const agg = window.StatsEngine.aggregate(events);
     const profile = window.StatsEngine.getProfile();
@@ -5591,6 +5657,10 @@ window.openInsightModal = function() {
     const topSong = agg.topSongs[0] || null;
     const topArtist = agg.topArtists[0] || null;
     const totalMins = Math.round(agg.totalListenMs / 60000);
+
+    const topSongTitle = topSong ? cleanStr(topSong.title) : '';
+    const topSongArtist = topSong ? cleanStr(topSong.artist) : '';
+    const topArtistName = topArtist ? cleanStr(topArtist.name) : '';
 
     const overlay = document.createElement('div');
     overlay.className = 'insight-modal-overlay';
@@ -5629,15 +5699,15 @@ window.openInsightModal = function() {
                 <div class="insight-mini-card" ${topSong ? `onclick="window.playSingleTrack('${topSong.id}')" style="cursor: pointer;"` : ''}>
                     <div class="insight-mini-thumb-wrap">
                         <img src="${topSong ? getHighestQualityImage(topSong.image) : window.StatsEngine.getSongPlaceholderSvg('', '')}" 
-                             onload="if(this.naturalWidth<=120&&this.naturalHeight<=90){this.src=window.StatsEngine.getSongPlaceholderSvg('${topSong ? (topSong.title || '').replace(/'/g, "\\'") : ''}','${topSong ? (topSong.artist || '').replace(/'/g, "\\'") : ''}');}" 
-                             onerror="this.src=window.StatsEngine.getSongPlaceholderSvg('${topSong ? (topSong.title || '').replace(/'/g, "\\'") : ''}','${topSong ? (topSong.artist || '').replace(/'/g, "\\'") : ''}');" 
+                             onload="if(this.naturalWidth<=120&&this.naturalHeight<=90){this.src=window.StatsEngine.getSongPlaceholderSvg('${escApos(topSongTitle)}','${escApos(topSongArtist)}');}" 
+                             onerror="this.src=window.StatsEngine.getSongPlaceholderSvg('${escApos(topSongTitle)}','${escApos(topSongArtist)}');" 
                              class="insight-mini-thumb" 
-                             alt="Top Track">
+                             alt="${escQuot(topSongTitle) || 'Top Track'}">
                     </div>
                     <div style="overflow: hidden;">
                         <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;">Top Track</div>
                         <div style="font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            ${topSong ? topSong.title : 'None yet'}
+                            ${escQuot(topSongTitle) || 'None yet'}
                         </div>
                         <div style="font-size: 12px; color: var(--text-secondary);">
                             ${topSong ? `${topSong.playCount} plays` : 'Keep streaming'}
@@ -5648,16 +5718,16 @@ window.openInsightModal = function() {
                 <div class="insight-mini-card" ${topArtist ? `onclick="location.hash='#artist/${topArtist.id}'" style="cursor: pointer;"` : ''}>
                     <div class="insight-mini-thumb-wrap round">
                         <img src="${topArtist ? getHighestQualityImage(topArtist.image) : window.StatsEngine.getArtistPlaceholderSvg('Artist')}" 
-                             data-artist-name="${topArtist ? (topArtist.name || '').replace(/"/g, '&quot;') : ''}" 
+                             data-artist-name="${escQuot(topArtistName)}" 
                              data-artist-id="${topArtist ? topArtist.id : ''}" 
-                             onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${topArtist ? (topArtist.name || '').replace(/'/g, "\\'") : 'Artist'}');}" 
+                             onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${escApos(topArtistName) || 'Artist'}');}" 
                              class="insight-mini-thumb round" 
-                             alt="Top Artist">
+                             alt="${escQuot(topArtistName) || 'Top Artist'}">
                     </div>
                     <div style="overflow: hidden;">
                         <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;">Top Artist</div>
                         <div style="font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            ${topArtist ? topArtist.name : 'None yet'}
+                            ${escQuot(topArtistName) || 'None yet'}
                         </div>
                         <div style="font-size: 12px; color: var(--text-secondary);">
                             ${topArtist ? `${topArtist.playCount} plays` : 'Keep streaming'}
@@ -5705,7 +5775,7 @@ window.openInsightModal = function() {
     document.body.appendChild(overlay);
 
     if (topArtist && (!topArtist.image || topArtist.image.startsWith('data:image/svg'))) {
-        window.StatsEngine.fetchArtistImageAsync(topArtist.name, topArtist.id);
+        window.StatsEngine.fetchArtistImageAsync(topArtistName, topArtist.id);
     }
 };
 
@@ -5715,11 +5785,12 @@ window.closeInsightModal = function() {
 };
 
 window.copyInsightReport = function() {
+    const cleanStr = (v) => window.StatsEngine.cleanStr(v);
     const events = window.StatsEngine.getEvents();
     const agg = window.StatsEngine.aggregate(events);
     const profile = window.StatsEngine.getProfile();
-    const topSong = agg.topSongs[0] ? agg.topSongs[0].title + ' by ' + agg.topSongs[0].artist : 'N/A';
-    const topArtist = agg.topArtists[0] ? agg.topArtists[0].name : 'N/A';
+    const topSong = agg.topSongs[0] ? cleanStr(agg.topSongs[0].title) + ' by ' + cleanStr(agg.topSongs[0].artist) : 'N/A';
+    const topArtist = agg.topArtists[0] ? cleanStr(agg.topArtists[0].name) : 'N/A';
 
     const text = `🎧 My AirBeats Insight Summary:
 👤 Listener: ${profile.name}

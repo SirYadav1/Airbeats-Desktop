@@ -8,6 +8,8 @@ import uuid
 import os
 import sys
 import time
+import json
+from datetime import datetime
 import zipfile
 import sqlite3
 import tempfile
@@ -118,7 +120,7 @@ def api_developer_news():
 @app.route('/api/restore_backup', methods=['POST'])
 @app.route('/api/stats/restore_backup', methods=['POST'])
 def restore_backup():
-    """Restores Android AirBeats .backup or .zip file containing music.db and airbeats_global_stats.xml"""
+    """Restores Android AirBeats .backup or .zip file containing music.db and airbeats_global_stats.xml, or JSON backups"""
     try:
         if 'file' not in request.files:
             return jsonify({"error": "No file uploaded"}), 400
@@ -131,122 +133,192 @@ def restore_backup():
             zip_path = os.path.join(temp_dir, 'backup.zip')
             file.save(zip_path)
             
+            history = []
+            favorites = []
+            playlists = []
+            stats_events = []
+            
             try:
                 with zipfile.ZipFile(zip_path, 'r') as zf:
                     zf.extractall(temp_dir)
             except zipfile.BadZipFile:
-                return jsonify({"error": "Invalid backup file format. Must be a valid .backup or .zip file."}), 400
+                # Check if the uploaded file is a raw JSON backup file (.json or renamed to .backup)
+                try:
+                    with open(zip_path, 'r', encoding='utf-8') as jf:
+                        jdata = json.load(jf)
+                        if isinstance(jdata, dict):
+                            return jsonify({
+                                "success": True,
+                                "history": jdata.get('recentlyPlayed', []),
+                                "favoriteSongs": jdata.get('favoriteSongs', []),
+                                "playlists": jdata.get('user_playlists', []),
+                                "statsEvents": jdata.get('statsEvents', [])
+                            })
+                except Exception:
+                    pass
+                return jsonify({"error": "Invalid backup file format. Must be a valid .backup, .zip, or .json file."}), 400
                 
-            history = []
-            favorites = []
-            playlists = []
-            
-            db_path = os.path.join(temp_dir, 'music.db')
-            if os.path.exists(db_path):
+            # Locate sqlite database file within the extracted archive
+            db_path = None
+            for root, dirs, files in os.walk(temp_dir):
+                for f in files:
+                    if f.lower() == 'music.db':
+                        db_path = os.path.join(root, f)
+                        break
+                if db_path:
+                    break
+
+            if not db_path:
+                for root, dirs, files in os.walk(temp_dir):
+                    for f in files:
+                        if f.lower().endswith('.db') or f.lower().endswith('.sqlite'):
+                            db_path = os.path.join(root, f)
+                            break
+                    if db_path:
+                        break
+
+            # If no SQLite database found, check for JSON backup inside the archive
+            if not db_path:
+                for root, dirs, files in os.walk(temp_dir):
+                    for f in files:
+                        if f.lower().endswith('.json'):
+                            try:
+                                with open(os.path.join(root, f), 'r', encoding='utf-8') as jf:
+                                    jdata = json.load(jf)
+                                    if isinstance(jdata, dict):
+                                        history = jdata.get('recentlyPlayed', []) or history
+                                        favorites = jdata.get('favoriteSongs', []) or favorites
+                                        playlists = jdata.get('user_playlists', []) or playlists
+                                        stats_events = jdata.get('statsEvents', []) or stats_events
+                                        break
+                            except Exception as ej:
+                                print(f"[BACKUP] JSON parse notice: {ej}")
+                    if history or favorites or playlists or stats_events:
+                        break
+
+            if db_path and os.path.exists(db_path):
                 try:
                     conn = sqlite3.connect(db_path)
                     cursor = conn.cursor()
                     
-                    # Helper columns info
-                    cursor.execute("PRAGMA table_info(song);")
-                    s_cols = [c[1] for c in cursor.fetchall()]
+                    # Inspect tables
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                    tables = {r[0].lower() for r in cursor.fetchall()}
+
+                    has_song = 'song' in tables
+                    s_cols = []
+                    if has_song:
+                        cursor.execute("PRAGMA table_info(song);")
+                        s_cols = [c[1] for c in cursor.fetchall()]
+                    
                     has_song_thumb = 'thumbnailUrl' in s_cols
                     song_thumb_expr = "s.thumbnailUrl" if has_song_thumb else "NULL"
 
-                    cursor.execute("PRAGMA table_info(artist);")
-                    a_cols = [c[1] for c in cursor.fetchall()]
+                    has_artist = 'artist' in tables
+                    a_cols = []
+                    if has_artist:
+                        cursor.execute("PRAGMA table_info(artist);")
+                        a_cols = [c[1] for c in cursor.fetchall()]
+
                     has_art_thumb = 'thumbnailUrl' in a_cols
                     art_thumb_expr = "a.thumbnailUrl" if has_art_thumb else "NULL"
 
+                    has_sam = 'song_artist_map' in tables
+                    sam_join = "LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0 LEFT JOIN artist a ON sam.artistId = a.id" if (has_sam and has_artist) else ""
+                    art_id_col = "a.id" if (has_sam and has_artist) else "NULL"
+                    art_name_col = "a.name" if (has_sam and has_artist) else ("s.artist" if 'artist' in s_cols else "NULL")
+                    art_thumb_col = art_thumb_expr if (has_sam and has_artist) else "NULL"
+
                     # 1. Query History from event joined with song & artist
-                    try:
-                        query = f"""
-                        SELECT 
-                            s.id, 
-                            s.title, 
-                            s.duration,
-                            {song_thumb_expr} as thumbnailUrl,
-                            a.id as artistId,
-                            a.name as artistName,
-                            {art_thumb_expr} as artistThumbnailUrl,
-                            e.timestamp
-                        FROM event e
-                        JOIN song s ON e.songId = s.id
-                        LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0
-                        LEFT JOIN artist a ON sam.artistId = a.id
-                        ORDER BY e.timestamp DESC
-                        LIMIT 200
-                        """
-                        cursor.execute(query)
-                        for row in cursor.fetchall():
-                            song_id, title, duration, thumb, artist_id, artist_name, art_thumb, timestamp = row
-                            song_img = thumb if (thumb and "ui-avatars" not in thumb) else (f"https://i.ytimg.com/vi/{song_id}/hqdefault.jpg" if song_id else "")
-                            history.append({
-                                "id": song_id,
-                                "name": title,
-                                "title": title,
-                                "artist": artist_name or "Unknown Artist",
-                                "subtitle": artist_name or "Unknown Artist",
-                                "type": "song",
-                                "image": song_img,
-                                "artistIds": artist_id or "",
-                                "artistImage": art_thumb if (art_thumb and "ui-avatars" not in art_thumb) else "",
-                                "playedAt": timestamp
-                            })
-                    except Exception as e_hist:
-                        print(f"[BACKUP] History parse notice: {e_hist}")
+                    if 'event' in tables and has_song:
+                        try:
+                            query = f"""
+                            SELECT 
+                                s.id, 
+                                s.title, 
+                                s.duration,
+                                {song_thumb_expr} as thumbnailUrl,
+                                {art_id_col} as artistId,
+                                {art_name_col} as artistName,
+                                {art_thumb_col} as artistThumbnailUrl,
+                                e.timestamp
+                            FROM event e
+                            JOIN song s ON e.songId = s.id
+                            {sam_join}
+                            ORDER BY e.timestamp DESC
+                            LIMIT 200
+                            """
+                            cursor.execute(query)
+                            for row in cursor.fetchall():
+                                song_id, title, duration, thumb, artist_id, artist_name, art_thumb, timestamp = row
+                                song_img = thumb if (thumb and "ui-avatars" not in thumb) else (f"https://i.ytimg.com/vi/{song_id}/hqdefault.jpg" if song_id else "")
+                                history.append({
+                                    "id": song_id,
+                                    "name": title,
+                                    "title": title,
+                                    "artist": artist_name or "Unknown Artist",
+                                    "subtitle": artist_name or "Unknown Artist",
+                                    "type": "song",
+                                    "image": song_img,
+                                    "artistIds": artist_id or "",
+                                    "artistImage": art_thumb if (art_thumb and "ui-avatars" not in art_thumb) else "",
+                                    "playedAt": timestamp
+                                })
+                        except Exception as e_hist:
+                            print(f"[BACKUP] History parse notice: {e_hist}")
 
                     # 2. Query Favorites
-                    try:
-                        fav_where = None
-                        if 'inLibrary' in s_cols:
-                            fav_where = "s.inLibrary = 1"
-                        elif 'favorite' in s_cols:
-                            fav_where = "s.favorite = 1"
-                        
-                        if fav_where:
-                            cursor.execute(f"""
-                                SELECT s.id, s.title, s.duration, a.name, {song_thumb_expr}
-                                FROM song s
-                                LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0
-                                LEFT JOIN artist a ON sam.artistId = a.id
-                                WHERE {fav_where}
-                                ORDER BY s.id DESC
-                            """)
-                            for f_row in cursor.fetchall():
-                                s_id = f_row[0]
-                                f_thumb = f_row[4]
-                                f_img = f_thumb if (f_thumb and "ui-avatars" not in f_thumb) else (f"https://i.ytimg.com/vi/{s_id}/hqdefault.jpg" if s_id else "")
-                                favorites.append({
-                                    "id": s_id,
-                                    "name": f_row[1],
-                                    "title": f_row[1],
-                                    "artist": f_row[3] or "Unknown Artist",
-                                    "duration": f_row[2] or 0,
-                                    "image": f_img
-                                })
-                    except Exception as e_fav:
-                        print(f"[BACKUP] Favorites parse notice: {e_fav}")
+                    if has_song:
+                        try:
+                            fav_where = None
+                            if 'inLibrary' in s_cols:
+                                fav_where = "s.inLibrary = 1"
+                            elif 'favorite' in s_cols:
+                                fav_where = "s.favorite = 1"
+                            elif 'isFavorite' in s_cols:
+                                fav_where = "s.isFavorite = 1"
+                            elif 'liked' in s_cols:
+                                fav_where = "s.liked = 1"
+                            
+                            if fav_where:
+                                cursor.execute(f"""
+                                    SELECT s.id, s.title, s.duration, {art_name_col}, {song_thumb_expr}
+                                    FROM song s
+                                    {sam_join}
+                                    WHERE {fav_where}
+                                    ORDER BY s.id DESC
+                                """)
+                                for f_row in cursor.fetchall():
+                                    s_id = f_row[0]
+                                    f_thumb = f_row[4]
+                                    f_img = f_thumb if (f_thumb and "ui-avatars" not in f_thumb) else (f"https://i.ytimg.com/vi/{s_id}/hqdefault.jpg" if s_id else "")
+                                    favorites.append({
+                                        "id": s_id,
+                                        "name": f_row[1],
+                                        "title": f_row[1],
+                                        "artist": f_row[3] or "Unknown Artist",
+                                        "duration": f_row[2] or 0,
+                                        "image": f_img
+                                    })
+                        except Exception as e_fav:
+                            print(f"[BACKUP] Favorites parse notice: {e_fav}")
 
                     # 3. Query Playlists
-                    try:
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlist';")
-                        if cursor.fetchone():
+                    if 'playlist' in tables and has_song:
+                        try:
                             cursor.execute("SELECT id, title FROM playlist;")
                             p_rows = cursor.fetchall()
                             
-                            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='playlist_song_map';")
-                            has_psm = bool(cursor.fetchone())
+                            has_psm = 'playlist_song_map' in tables
                             
                             for pid, ptitle in p_rows:
                                 songs = []
                                 if has_psm:
                                     cursor.execute(f"""
-                                        SELECT s.id, s.title, s.duration, a.name, {song_thumb_expr}
+                                        SELECT s.id, s.title, s.duration, {art_name_col}, {song_thumb_expr}
                                         FROM playlist_song_map psm
                                         JOIN song s ON psm.songId = s.id
-                                        LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0
-                                        LEFT JOIN artist a ON sam.artistId = a.id
+                                        {sam_join}
                                         WHERE psm.playlistId = ?
                                         ORDER BY psm.position ASC
                                     """, (pid,))
@@ -268,14 +340,12 @@ def restore_backup():
                                     "title": ptitle,
                                     "songs": songs
                                 })
-                    except Exception as e_pl:
-                        print(f"[BACKUP] Playlists parse notice: {e_pl}")
+                        except Exception as e_pl:
+                            print(f"[BACKUP] Playlists parse notice: {e_pl}")
 
                     # 4. Query Listening Events for Stats Engine
-                    stats_events = []
-                    try:
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='event';")
-                        if cursor.fetchone():
+                    if 'event' in tables and has_song:
+                        try:
                             cursor.execute("PRAGMA table_info(event);")
                             e_cols = [c[1] for c in cursor.fetchall()]
 
@@ -295,15 +365,14 @@ def restore_backup():
                                 {song_thumb_expr} as thumbnailUrl,
                                 {album_id_expr} as albumId,
                                 {album_name_expr} as albumName,
-                                a.id as artistId,
-                                a.name as artistName,
-                                {art_thumb_expr} as artistThumbnailUrl,
+                                {art_id_col} as artistId,
+                                {art_name_col} as artistName,
+                                {art_thumb_col} as artistThumbnailUrl,
                                 e.timestamp,
                                 {play_time_expr} as playTime
                             FROM event e
                             JOIN song s ON e.songId = s.id
-                            LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0
-                            LEFT JOIN artist a ON sam.artistId = a.id
+                            {sam_join}
                             ORDER BY e.timestamp DESC
                             """
                             cursor.execute(events_query)
@@ -323,12 +392,30 @@ def restore_backup():
                                     "timeListenedMs": int(p_time if p_time is not None else (duration * 1000 if duration else 180000)),
                                     "timestamp": t_stamp
                                 })
-                    except Exception as e_ev:
-                        print(f"[BACKUP] Stats events parse notice: {e_ev}")
+                        except Exception as e_ev:
+                            print(f"[BACKUP] Stats events parse notice: {e_ev}")
                         
                     conn.close()
                 except Exception as e_db:
                     print(f"[BACKUP] SQLite connection error: {e_db}")
+
+            # If stats_events is empty but history has songs, seed stats_events from history
+            if not stats_events and history:
+                now_ts = time.time()
+                for idx, h in enumerate(history):
+                    stats_events.append({
+                        "songId": h.get("id", ""),
+                        "title": h.get("title") or h.get("name") or "Unknown Track",
+                        "artist": h.get("artist") or "Unknown Artist",
+                        "artistId": h.get("artistIds") or "",
+                        "artistImage": h.get("artistImage") or "",
+                        "album": "",
+                        "albumId": "",
+                        "image": h.get("image") or "",
+                        "duration": h.get("duration") or 0,
+                        "timeListenedMs": int((h.get("duration") or 180) * 1000),
+                        "timestamp": h.get("playedAt") or datetime.utcfromtimestamp(now_ts - (idx * 300)).isoformat()
+                    })
 
             return jsonify({
                 "success": True,

@@ -21,14 +21,15 @@
     --player-text-sec: #999999;
 }
 
-* {
+*, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
     font-family: 'Inter', sans-serif;
+    -webkit-tap-highlight-color: transparent;
 }
 
-body {
+html, body {
     background: var(--bg-outside);
     height: 100vh;
     display: flex;
@@ -36,6 +37,85 @@ body {
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    caret-color: transparent;
+}
+
+/* Prevent accidental text cursor / carets on all buttons and interactive components */
+button,
+.btn,
+.btn-primary,
+.btn-secondary,
+.icon-btn,
+.nav-item,
+.sidebar,
+.player-bar,
+.card,
+.song-item,
+.stats-item-card,
+.stats-period-chip,
+.stats-tab-btn,
+.setting-item,
+.color-swatch,
+.chip,
+.tab-btn,
+[onclick],
+[role="button"] {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    caret-color: transparent;
+    outline: none;
+}
+
+/* Restore normal text selection and text cursor (caret) ONLY for search inputs and textareas */
+input,
+textarea,
+[contenteditable="true"] {
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+    caret-color: var(--accent, #1db954) !important;
+}
+
+/* Allow text selection for lyrics so users can copy lyrics without blinking carets on tapping */
+.lyrics-text,
+.lyrics-line,
+.selectable-text {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
+    caret-color: transparent;
+}
+
+/* Color swatch buttons in appearance settings */
+.color-swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid white;
+    user-select: none;
+    -webkit-user-select: none;
+    caret-color: transparent;
+    outline: none;
+    padding: 0;
+    margin: 0;
+    flex-shrink: 0;
+    display: inline-block;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.color-swatch:hover {
+    transform: scale(1.12);
+}
+.color-swatch:active {
+    transform: scale(0.92);
 }
 
 /* APP WINDOW */

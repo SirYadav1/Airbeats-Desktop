@@ -3107,16 +3107,16 @@ async function renderSettingsAppearance() {
               <h3 style="margin-top: 0; font-size: 20px;">Accent Color</h3>
             <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Customize the accent color used for active elements and buttons.</p>
             
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #ff0055; cursor: pointer; border: 2px solid white;" onclick="setAccentColor('#ff0055')" title="Rose"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #1db954; cursor: pointer;" onclick="setAccentColor('#1db954')" title="Spotify Green"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #1d4ed8; cursor: pointer;" onclick="setAccentColor('#1d4ed8')" title="Blue"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #8b5cf6; cursor: pointer;" onclick="setAccentColor('#8b5cf6')" title="Purple"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #f59e0b; cursor: pointer;" onclick="setAccentColor('#f59e0b')" title="Amber"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #ec4899; cursor: pointer;" onclick="setAccentColor('#ec4899')" title="Pink"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #06b6d4; cursor: pointer;" onclick="setAccentColor('#06b6d4')" title="Cyan"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #84cc16; cursor: pointer;" onclick="setAccentColor('#84cc16')" title="Lime"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #ef4444; cursor: pointer;" onclick="setAccentColor('#ef4444')" title="Red"></div>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; user-select: none; -webkit-user-select: none;">
+                <button type="button" class="color-swatch" style="background: #ff0055;" onclick="setAccentColor('#ff0055')" title="Rose"></button>
+                <button type="button" class="color-swatch" style="background: #1db954;" onclick="setAccentColor('#1db954')" title="Spotify Green"></button>
+                <button type="button" class="color-swatch" style="background: #1d4ed8;" onclick="setAccentColor('#1d4ed8')" title="Blue"></button>
+                <button type="button" class="color-swatch" style="background: #8b5cf6;" onclick="setAccentColor('#8b5cf6')" title="Purple"></button>
+                <button type="button" class="color-swatch" style="background: #f59e0b;" onclick="setAccentColor('#f59e0b')" title="Amber"></button>
+                <button type="button" class="color-swatch" style="background: #ec4899;" onclick="setAccentColor('#ec4899')" title="Pink"></button>
+                <button type="button" class="color-swatch" style="background: #06b6d4;" onclick="setAccentColor('#06b6d4')" title="Cyan"></button>
+                <button type="button" class="color-swatch" style="background: #84cc16;" onclick="setAccentColor('#84cc16')" title="Lime"></button>
+                <button type="button" class="color-swatch" style="background: #ef4444;" onclick="setAccentColor('#ef4444')" title="Red"></button>
             </div>
         </div>
 
@@ -3124,17 +3124,17 @@ async function renderSettingsAppearance() {
             <h3 style="margin-top: 0; font-size: 20px;">Panel Color</h3>
             <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Customize the background color of the sidebar and the mini player.</p>
             
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #4c4a4a; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#4c4a4a')" title="Default Grey"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #1f2937; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#1f2937')" title="Slate"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #0f172a; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#0f172a')" title="Midnight Blue"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #4c0519; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#4c0519')" title="Deep Red"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #064e3b; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#064e3b')" title="Forest Green"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #3b0764; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#3b0764')" title="Deep Purple"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #134e4a; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#134e4a')" title="Teal"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #3f2e27; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#3f2e27')" title="Espresso"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #27272a; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#27272a')" title="Charcoal"></div>
-                <div style="width: 40px; height: 40px; border-radius: 50%; background: #171717; cursor: pointer; border: 2px solid white;" onclick="setPanelColor('#171717')" title="Pitch Black"></div>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; user-select: none; -webkit-user-select: none;">
+                <button type="button" class="color-swatch" style="background: #4c4a4a;" onclick="setPanelColor('#4c4a4a')" title="Default Grey"></button>
+                <button type="button" class="color-swatch" style="background: #1f2937;" onclick="setPanelColor('#1f2937')" title="Slate"></button>
+                <button type="button" class="color-swatch" style="background: #0f172a;" onclick="setPanelColor('#0f172a')" title="Midnight Blue"></button>
+                <button type="button" class="color-swatch" style="background: #4c0519;" onclick="setPanelColor('#4c0519')" title="Deep Red"></button>
+                <button type="button" class="color-swatch" style="background: #064e3b;" onclick="setPanelColor('#064e3b')" title="Forest Green"></button>
+                <button type="button" class="color-swatch" style="background: #3b0764;" onclick="setPanelColor('#3b0764')" title="Deep Purple"></button>
+                <button type="button" class="color-swatch" style="background: #134e4a;" onclick="setPanelColor('#134e4a')" title="Teal"></button>
+                <button type="button" class="color-swatch" style="background: #3f2e27;" onclick="setPanelColor('#3f2e27')" title="Espresso"></button>
+                <button type="button" class="color-swatch" style="background: #27272a;" onclick="setPanelColor('#27272a')" title="Charcoal"></button>
+                <button type="button" class="color-swatch" style="background: #171717;" onclick="setPanelColor('#171717')" title="Pitch Black"></button>
             </div>
         </div>
     </div>

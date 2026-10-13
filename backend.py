@@ -65,13 +65,16 @@ def format_song(song):
     }
 
 def format_artist(artist):
+    name = artist.get("artist") or artist.get("name") or artist.get("title") or ""
+    thumbs = artist.get("thumbnails", [])
+    img_url = thumbs[-1]["url"] if thumbs else ""
     return {
         "id": artist.get("browseId", ""),
-        "name": artist.get("artist", artist.get("name", "")),
-        "title": artist.get("artist", artist.get("name", "")),
+        "name": name,
+        "title": name,
         "subtitle": "Artist",
         "type": "artist",
-        "image": [{"quality": "500x500", "url": artist.get("thumbnails", [{"url": "https://via.placeholder.com/150"}])[-1]["url"] if artist.get("thumbnails") else "https://via.placeholder.com/150"}]
+        "image": [{"quality": "500x500", "url": img_url}] if img_url else []
     }
 
 def format_album(album):
@@ -310,13 +313,19 @@ def add_yt_routes(app, get_lyrics_fn):
                 except:
                     pass
 
-            # Fetch popular artists for "Artists For You"
+            # Fetch popular artists with thumbnails for "Artists For You"
             popular_artists = []
             try:
-                art_res = yt.search("popular artists", filter="artists")
-                popular_artists = [format_artist(a) for a in art_res[:12]]
-            except:
-                pass
+                charts = yt.get_charts()
+                chart_artists = charts.get('artists', []) if isinstance(charts, dict) else []
+                popular_artists = [format_artist(a) for a in chart_artists[:15] if a]
+            except Exception as e:
+                print("Error getting chart artists:", e)
+                try:
+                    art_res = yt.search("Top Artists", filter="artists")
+                    popular_artists = [format_artist(a) for a in art_res[:15] if a]
+                except:
+                    pass
 
             # Fetch new releases
             new_releases = []

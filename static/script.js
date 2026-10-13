@@ -249,13 +249,19 @@ const formatNumber = (num) => {
     return num.toString();
 };
 
+const DEFAULT_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Crect width='150' height='150' fill='%2318181b'/%3E%3Ccircle cx='75' cy='75' r='35' fill='%2327272a'/%3E%3Cpath d='M75 55c-11.05 0-20 8.95-20 20s8.95 20 20 20 20-8.95 20-20-8.95-20-20-20zm0 30c-5.52 0-10-4.48-10-10s4.48-10 10-10 10 4.48 10 10-4.48 10-10 10z' fill='%2352525b'/%3E%3C/svg%3E";
+
 const getHighestQualityImage = (images) => {
-    let url = 'https://via.placeholder.com/150';
+    let url = DEFAULT_PLACEHOLDER;
     if (!images) return url;
     if (typeof images === 'string') url = images;
     else if (Array.isArray(images) && images.length > 0) url = images[images.length - 1].url || images[images.length - 1].link || url;
     else if (images.url) url = images.url;
     else if (images.link) url = images.link;
+    
+    if (url.includes('placeholder.com')) {
+        url = DEFAULT_PLACEHOLDER;
+    }
     
     if (url.includes('googleusercontent.com') && url.includes('=w')) {
         url = url.replace(/=w\d+-h\d+.*/, '=w1080-h1080-l90-rj');
@@ -821,24 +827,50 @@ async function renderHome() {
         // ==========================================
         let artistsForYouList = [];
         const artistIds = new Set();
+        let playedArtistsUpdated = false;
 
+        // Enhance playedArtists with artworks from play history or favorites if image is missing
         playedArtists.forEach(art => {
-            if (!artistIds.has(art.id)) {
-                artistIds.add(art.id);
+            const hasValidImg = art.image && 
+                ((typeof art.image === 'string' && !art.image.includes('placeholder') && !art.image.startsWith('data:')) || 
+                 (Array.isArray(art.image) && art.image.length > 0 && art.image[0].url && !art.image[0].url.includes('placeholder')));
+            
+            if (!hasValidImg) {
+                const match = history.find(s => 
+                    (s.artists?.primary?.some(a => (a.id && a.id === art.id) || (a.name && art.name && a.name.toLowerCase() === art.name.toLowerCase()))) ||
+                    (s.subtitle && art.name && s.subtitle.toLowerCase().includes(art.name.toLowerCase()))
+                ) || favs.find(s => 
+                    (s.artists?.primary?.some(a => (a.id && a.id === art.id) || (a.name && art.name && a.name.toLowerCase() === art.name.toLowerCase()))) ||
+                    (s.subtitle && art.name && s.subtitle.toLowerCase().includes(art.name.toLowerCase()))
+                );
+                if (match && match.image) {
+                    art.image = match.image;
+                    playedArtistsUpdated = true;
+                }
+            }
+
+            const key = (art.id || art.name || '').toLowerCase();
+            if (key && !artistIds.has(key)) {
+                artistIds.add(key);
                 artistsForYouList.push(art);
             }
         });
 
+        if (playedArtistsUpdated) {
+            try { localStorage.setItem('playedArtists', JSON.stringify(playedArtists)); } catch(e){}
+        }
+
         if (homeData.popular_artists && Array.isArray(homeData.popular_artists)) {
             homeData.popular_artists.forEach(art => {
-                if (!artistIds.has(art.id)) {
-                    artistIds.add(art.id);
+                const key = (art.id || art.name || '').toLowerCase();
+                if (key && !artistIds.has(key)) {
+                    artistIds.add(key);
                     artistsForYouList.push(art);
                 }
             });
         }
 
-        artistsForYouList = artistsForYouList.slice(0, 14);
+        artistsForYouList = artistsForYouList.slice(0, 18);
 
         if (artistsForYouList.length > 0) {
             html += `
@@ -861,16 +893,44 @@ async function renderHome() {
             `;
 
             artistsForYouList.forEach(art => {
-                const img = getHighestQualityImage(art.image);
+                let img = getHighestQualityImage(art.image);
+                const artName = art.name || art.title || 'Artist';
+                const artId = art.id || '';
+                const initial = (artName || 'A').charAt(0).toUpperCase();
+
+                // If image is placeholder or missing, try one more time to match history
+                const isRealImg = img && !img.includes('placeholder') && !img.startsWith('data:');
+                if (!isRealImg) {
+                    const match = history.find(s => 
+                        (s.artists?.primary?.some(a => (a.id && a.id === artId) || (a.name && a.name.toLowerCase() === artName.toLowerCase()))) ||
+                        (s.subtitle && s.subtitle.toLowerCase().includes(artName.toLowerCase()))
+                    );
+                    if (match && match.image) {
+                        img = getHighestQualityImage(match.image);
+                    }
+                }
+
+                const hasImgNow = img && !img.includes('placeholder') && !img.startsWith('data:');
+
                 html += `
-                <div class="artist-shelf-card" onclick="window.location.hash='#artist/${art.id}'">
+                <div class="artist-shelf-card" onclick="window.location.hash='#artist/${artId}'">
                     <div class="asc-avatar-wrap">
-                        <img src="${img}" class="asc-avatar" loading="lazy">
+                        ${hasImgNow 
+                            ? `<img src="${img}" class="asc-avatar" loading="lazy" onerror="window.handleArtistImgError(this, '${safeEscape(artId)}', '${safeEscape(artName)}')">`
+                            : `<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="asc-avatar" style="display:none;" onload="window.handleArtistImgError(this, '${safeEscape(artId)}', '${safeEscape(artName)}')" onerror="window.handleArtistImgError(this, '${safeEscape(artId)}', '${safeEscape(artName)}')"><div class="asc-avatar-initial">${initial}</div>`
+                        }
                     </div>
-                    <div class="asc-name">${safeEscape(art.name || art.title)}</div>
+                    <div class="asc-name">${safeEscape(artName)}</div>
                     <div class="asc-pill">Artist</div>
                 </div>
                 `;
+                
+                // If it doesn't have an image, proactively fetch its avatar
+                if (!hasImgNow) {
+                    setTimeout(() => {
+                        window.proactiveFetchArtistImage(artId, artName);
+                    }, 50);
+                }
             });
 
             html += `</div></div>`;
@@ -1846,14 +1906,24 @@ window.scrobbleCurrentTrack = function() {
     let track = window.getCurrentTrack();
     if (!track) return;
 
-    // Save to playedArtists
+    // Save to playedArtists with thumbnail
     if (track.artists && track.artists.primary && track.artists.primary.length > 0) {
         let playedArtists = JSON.parse(localStorage.getItem('playedArtists') || '[]');
-        const pArtist = track.artists.primary[0];
-        playedArtists = playedArtists.filter(a => a.id !== pArtist.id);
+        const primaryA = track.artists.primary[0];
+        const pArtist = {
+            id: primaryA.id || '',
+            name: primaryA.name || '',
+            image: track.image || ''
+        };
+        playedArtists = playedArtists.filter(a => (a.id && a.id !== pArtist.id) && (a.name && a.name.toLowerCase() !== pArtist.name.toLowerCase()));
         playedArtists.unshift(pArtist);
-        if (playedArtists.length > 10) playedArtists.pop();
+        if (playedArtists.length > 20) playedArtists.pop();
         localStorage.setItem('playedArtists', JSON.stringify(playedArtists));
+        
+        // Fetch official artist avatar in background
+        if (pArtist.id && pArtist.id.startsWith('UC')) {
+            window.proactiveFetchArtistImage(pArtist.id, pArtist.name);
+        }
     }
 
     // Save to lastPlayedAlbum
@@ -6521,4 +6591,136 @@ window.resetAodDefaults = function() {
     localStorage.setItem('aod_darkness', '0.6');
     localStorage.setItem('aod_spotlight_intensity', '0.75');
     renderSettingsAOD();
+};
+
+
+window.artistAvatarCache = {};
+
+window.handleArtistImgError = function(imgEl, artistId, artistName) {
+    if (!imgEl) return;
+    imgEl.onerror = null;
+    imgEl.onload = null;
+
+    const wrap = imgEl.parentElement;
+    const showInitial = () => {
+        if (!wrap) return;
+        const initial = (artistName || 'A').charAt(0).toUpperCase();
+        imgEl.style.display = 'none';
+        if (!wrap.querySelector('.asc-avatar-initial')) {
+            const initDiv = document.createElement('div');
+            initDiv.className = 'asc-avatar-initial';
+            initDiv.innerText = initial;
+            wrap.appendChild(initDiv);
+        }
+    };
+
+    // Check memory cache
+    const key = (artistId || artistName || '').toLowerCase();
+    if (key && window.artistAvatarCache[key]) {
+        imgEl.src = window.artistAvatarCache[key];
+        imgEl.style.display = 'block';
+        const initDiv = wrap.querySelector('.asc-avatar-initial');
+        if (initDiv) initDiv.remove();
+        return;
+    }
+
+    // Proactively fetch
+    window.proactiveFetchArtistImage(artistId, artistName, imgEl);
+};
+
+window.proactiveFetchArtistImage = function(artistId, artistName, imgEl) {
+    const key = (artistId || artistName || '').toLowerCase();
+    if (!key) return;
+
+    if (window.artistAvatarCache[key]) {
+        if (imgEl) {
+            imgEl.src = window.artistAvatarCache[key];
+            imgEl.style.display = 'block';
+            const initDiv = imgEl.parentElement ? imgEl.parentElement.querySelector('.asc-avatar-initial') : null;
+            if (initDiv) initDiv.remove();
+        }
+        return;
+    }
+
+    const applyImg = (imgUrl) => {
+        if (!imgUrl || imgUrl.includes('placeholder')) return;
+        window.artistAvatarCache[key] = imgUrl;
+
+        // Update any matching elements on screen
+        document.querySelectorAll(`.artist-shelf-card`).forEach(card => {
+            const onclickAttr = card.getAttribute('onclick') || '';
+            const nameEl = card.querySelector('.asc-name');
+            const matchName = nameEl && nameEl.innerText.trim().toLowerCase() === (artistName || '').toLowerCase();
+            const matchId = artistId && onclickAttr.includes(artistId);
+
+            if (matchId || matchName) {
+                const wrap = card.querySelector('.asc-avatar-wrap');
+                if (wrap) {
+                    let img = wrap.querySelector('img');
+                    if (!img) {
+                        img = document.createElement('img');
+                        img.className = 'asc-avatar';
+                        wrap.appendChild(img);
+                    }
+                    img.src = imgUrl;
+                    img.style.display = 'block';
+                    const initDiv = wrap.querySelector('.asc-avatar-initial');
+                    if (initDiv) initDiv.remove();
+                }
+            }
+        });
+
+        // Save into localStorage playedArtists
+        try {
+            let pa = JSON.parse(localStorage.getItem('playedArtists') || '[]');
+            let changed = false;
+            pa.forEach(a => {
+                if ((artistId && a.id === artistId) || (artistName && a.name && a.name.toLowerCase() === artistName.toLowerCase())) {
+                    a.image = imgUrl;
+                    if (artistId && !a.id) a.id = artistId;
+                    changed = true;
+                }
+            });
+            if (changed) localStorage.setItem('playedArtists', JSON.stringify(pa));
+        } catch(e){}
+    };
+
+    if (artistId && artistId.startsWith('UC')) {
+        fetch(`/api/artists?id=${artistId}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res && res.success && res.data && res.data.image && res.data.image.length > 0) {
+                    const u = getHighestQualityImage(res.data.image);
+                    if (u && !u.includes('placeholder') && !u.startsWith('data:')) {
+                        applyImg(u);
+                        return;
+                    }
+                }
+                if (artistName) window.searchArtistAvatar(artistName, applyImg);
+            })
+            .catch(() => {
+                if (artistName) window.searchArtistAvatar(artistName, applyImg);
+            });
+    } else if (artistName) {
+        window.searchArtistAvatar(artistName, applyImg);
+    }
+};
+
+window.searchArtistAvatar = function(artistName, callback) {
+    if (!artistName) return;
+    fetch(`/api/search/artists?query=${encodeURIComponent(artistName)}`)
+        .then(r => r.json())
+        .then(res => {
+            const list = res && res.data;
+            if (Array.isArray(list) && list.length > 0) {
+                const matched = list.find(a => a.name && a.name.toLowerCase() === artistName.toLowerCase()) || list[0];
+                if (matched && matched.image) {
+                    const u = getHighestQualityImage(matched.image);
+                    if (u && !u.includes('placeholder') && !u.startsWith('data:')) {
+                        callback(u);
+                    }
+                }
+            }
+        })
+        .catch(() => {});
 };

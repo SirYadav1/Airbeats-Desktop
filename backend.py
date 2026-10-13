@@ -6,7 +6,10 @@ import json
 import threading
 from flask import request, jsonify, redirect, send_file
 
+# Initialize ytmusicapi client (public API - no token storage)
 yt = YTMusic()
+
+
 
 # Helper to format songs
 def format_song(song):

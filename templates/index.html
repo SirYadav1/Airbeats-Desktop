@@ -505,8 +505,9 @@
                                     <div id="rightPanelArtist" class="np-artist">Artist</div>
                                 </div>
                                 <div style="display: flex; gap: 16px; align-items: center; justify-content: flex-end;">
-                                    <i class="far fa-heart" id="likeBtn" style="cursor:pointer; font-size: 18px; color: var(--text-secondary);"></i>
+                                    <i class="far fa-heart" id="likeBtn" style="cursor:pointer; font-size: 18px; color: var(--text-secondary);" title="Like"></i>
                                     <i class="fas fa-folder-plus" id="playlistBtn" style="cursor:pointer; font-size: 18px; color: var(--text-secondary);" title="Add to Playlist"></i>
+                                    <i class="fas fa-ellipsis-v" id="rightPanelMoreBtn" style="cursor:pointer; font-size: 18px; color: var(--text-secondary);" onclick="window.openPlayerMoreMenu()" title="More Options"></i>
                                 </div>
                             </div>
                         </div>
@@ -581,7 +582,7 @@
     <audio id="audioElement"></audio>
 
     <!-- PLAYLIST MODAL -->
-    <div class="modal-overlay" id="playlistModal">
+    <div class="modal-overlay" id="playlistModal" onclick="if(event.target === this) window.closePlaylistModal()">
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Add to Playlist</div>

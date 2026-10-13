@@ -3322,7 +3322,7 @@ async function renderSettingsAbout() {
 
         <!-- Version Badges -->
         <div style="display: flex; gap: 8px; margin-bottom: 20px; align-items: center;">
-            <span style="border: 1.5px solid var(--accent); color: var(--accent); border-radius: 50px; padding: 4px 16px; font-size: 13px; font-weight: bold; text-transform: uppercase;">5.7.0</span>
+            <span style="border: 1.5px solid var(--accent); color: var(--accent); border-radius: 50px; padding: 4px 16px; font-size: 13px; font-weight: bold; text-transform: uppercase;">6.4.0</span>
         </div>
 
         <!-- Developer Text -->

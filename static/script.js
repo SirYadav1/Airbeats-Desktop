@@ -2836,7 +2836,7 @@ async function renderSettingsBackup() {
         <div class="settings-page" style="padding: 20px 30px; max-width: 800px; margin: 0 auto; color: var(--text-primary);">
             <div class="hero-header" style="background: none; border-bottom: 1px solid var(--border-color); margin-bottom: 30px; padding: 10px 0 20px 0;">
                 <div class="hero-info">
-                    <div class="hero-title" style="font-size: 32px; font-weight: 700; margin-bottom: 6px;">Backup & Restore</div>
+                    <div class="hero-title" style="font-size: 32px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 12px;"><i class="fas fa-database" style="color: var(--accent);"></i> Backup & Restore</div>
                     <div class="hero-meta" style="color: var(--text-secondary); font-size: 14px;">Import your library from the AirBeats Android app (.backup) or export your desktop library</div>
                 </div>
             </div>
@@ -3031,8 +3031,8 @@ async function renderSettingsAppearance() {
     routerView.innerHTML = `
     <div class="hero-header" style="background: none; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; padding: 20px;">
         <div class="hero-info">
-            <div class="hero-title">Appearance</div>
-            <div class="hero-meta">Customize your Airbeats experience</div>
+            <div class="hero-title" style="font-size: 32px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 12px;"><i class="fas fa-palette" style="color: var(--accent);"></i> Appearance</div>
+            <div class="hero-meta" style="color: var(--text-secondary); font-size: 14px;">Customize your Airbeats experience</div>
         </div>
     </div>
     <div style="padding: 0 20px; padding-bottom: 100px;">

@@ -433,6 +433,7 @@
                 <ul class="nav-links">
                     <li><a href="#settings/backup" class="nav-item" id="nav-settings-backup">Backup & Restore</a></li>
                     <li><a href="#settings/appearance" class="nav-item" id="nav-settings-appearance">Appearance</a></li>
+                    <li><a href="#settings/aod" class="nav-item" id="nav-settings-aod"><i class="fas fa-moon" style="font-size:12px; margin-right:6px;"></i> Always On Display</a></li>
                     <li><a href="#settings/about" class="nav-item" id="nav-settings-about">About</a></li>
                     <li><a href="#settings/updates" class="nav-item" id="nav-settings-updates">Updates</a></li>
                 </ul>
@@ -563,10 +564,8 @@
             <div class="fp-right">
                 <button class="icon-btn" id="shuffleBtn" onclick="window.toggleShuffle()" title="Shuffle"><i class="fas fa-random"></i></button>
                 <button class="icon-btn" id="repeatBtn" onclick="window.toggleRepeat()" title="Repeat"><i class="fas fa-redo"></i></button>
-                <button class="icon-btn" id="downloadBtn" onclick="window.downloadCurrentSong()" title="Download Song"><i class="fas fa-download"></i></button>
                 <button class="icon-btn" id="lyricsBtn" onclick="window.toggleLyrics()" title="Lyrics"><i class="fas fa-microphone-alt"></i></button>
-                <button class="icon-btn" onclick="window.openListenTogetherModal()" title="Listen Together"><i class="fas fa-users" style="color: #1DB954;"></i></button>
-                <button class="icon-btn" id="muteBtn" onclick="window.toggleMute()" title="Mute/Unmute"><i class="fas fa-volume-up"></i></button>
+                <button class="icon-btn" id="playerMoreBtn" onclick="window.openPlayerMoreMenu()" title="More Options"><i class="fas fa-ellipsis-v"></i></button>
             </div>
         </div>
     </div>
@@ -654,6 +653,198 @@
                 <button id="btn-update-cancel" style="padding: 10px 20px; background: rgba(255,255,255,0.1); color: var(--text-primary); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: inherit; flex: 1;">Cancel</button>
                 <button id="btn-update-download" style="padding: 10px 20px; background: var(--accent); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: inherit; flex: 1;">Download</button>
             </div>
+        </div>
+    </div>
+
+    <!-- PLAYER BOTTOM SHEET (Android Style 3-Dot Popup) -->
+    <div class="player-more-sheet-overlay" id="playerMoreSheetOverlay" onclick="window.closePlayerMoreMenu(event)" style="display: none;">
+        <div class="player-more-sheet" id="playerMoreSheet" onclick="event.stopPropagation()">
+            <div class="sheet-handle-bar" onclick="window.closePlayerMoreMenu()"></div>
+            
+            <div class="sheet-header">
+                <div class="sheet-track-info">
+                    <img id="sheetTrackImage" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="skeleton" alt="Artwork">
+                    <div class="sheet-track-meta">
+                        <div id="sheetTrackTitle" class="sheet-track-title">No song playing</div>
+                        <div id="sheetTrackArtist" class="sheet-track-artist">AirBeats Player</div>
+                    </div>
+                </div>
+                <button class="sheet-close-btn" onclick="window.closePlayerMoreMenu()" title="Close menu">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Volume Control Section -->
+            <div class="sheet-volume-container">
+                <div class="sheet-volume-header">
+                    <span class="sheet-volume-label"><i class="fas fa-volume-up" id="sheetVolIcon"></i> Playback Volume</span>
+                    <span class="sheet-volume-val" id="sheetVolVal">100%</span>
+                </div>
+                <div class="sheet-volume-row">
+                    <button class="sheet-vol-mute-btn" id="sheetMuteBtn" onclick="window.toggleMute()" title="Mute/Unmute">
+                        <i class="fas fa-volume-up"></i>
+                    </button>
+                    <div class="sheet-slider-wrap">
+                        <input type="range" min="0" max="100" value="100" id="sheetVolumeSlider" class="sheet-volume-slider" oninput="window.onSheetVolumeInput(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Options Menu Items -->
+            <div class="sheet-options-list">
+                <!-- Always On Display Option -->
+                <div class="sheet-option-item aod-highlight" onclick="window.activateAlwaysOnDisplayFromSheet()">
+                    <div class="sheet-option-icon aod-icon">
+                        <i class="fas fa-moon"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Always On Display</div>
+                        <div class="sheet-option-subtitle">Activate ambient full-screen OLED player</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-expand"></i>
+                    </div>
+                </div>
+
+                <!-- Download Option -->
+                <div class="sheet-option-item" onclick="window.downloadFromSheet()">
+                    <div class="sheet-option-icon download-icon">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Download Track</div>
+                        <div class="sheet-option-subtitle">Save audio file to desktop</div>
+                    </div>
+                    <div class="sheet-option-action" id="sheetDownloadActionIcon">
+                        <i class="fas fa-arrow-down"></i>
+                    </div>
+                </div>
+
+                <!-- Listen Together Option -->
+                <div class="sheet-option-item" onclick="window.listenTogetherFromSheet()">
+                    <div class="sheet-option-icon listen-together-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Listen Together</div>
+                        <div class="sheet-option-subtitle">Stream in real-time with friends</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+
+                <!-- Add to Playlist Option -->
+                <div class="sheet-option-item" onclick="window.addToPlaylistFromSheet()">
+                    <div class="sheet-option-icon playlist-icon">
+                        <i class="fas fa-folder-plus"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Add to Playlist</div>
+                        <div class="sheet-option-subtitle">Save into desktop library playlist</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+
+                <!-- Synchronized Lyrics Option -->
+                <div class="sheet-option-item" onclick="window.lyricsFromSheet()">
+                    <div class="sheet-option-icon lyrics-icon">
+                        <i class="fas fa-microphone-alt"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Synchronized Lyrics</div>
+                        <div class="sheet-option-subtitle">Real-time karaoke style scrolling lyrics</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+
+                <!-- AOD Customization Settings Shortcut -->
+                <div class="sheet-option-item" onclick="window.openAodSettingsFromSheet()">
+                    <div class="sheet-option-icon settings-icon">
+                        <i class="fas fa-sliders-h"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">AOD Customization</div>
+                        <div class="sheet-option-subtitle">Configure styles, shapes, clock & animations in Settings</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-cog"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ALWAYS ON DISPLAY (AOD) FULL-SCREEN OVERLAY -->
+    <div id="alwaysOnDisplayOverlay" class="aod-overlay" style="display: none;">
+        <!-- Ambient background & spotlight layers -->
+        <div id="aodBackgroundLayer" class="aod-bg-layer"></div>
+        <div id="aodSpotlightLayer" class="aod-spotlight-layer"></div>
+
+        <!-- AOD Top Navigation Bar -->
+        <div class="aod-top-bar">
+            <button class="aod-back-btn" onclick="window.exitAlwaysOnDisplay()" title="Exit Always On Display (Esc)">
+                <i class="fas fa-chevron-left"></i> <span>Exit</span>
+            </button>
+            <div id="aodClock" class="aod-clock">12:00</div>
+            <div class="aod-top-actions">
+                <a href="#settings/aod" onclick="window.exitAlwaysOnDisplay()" class="aod-icon-link" title="AOD Customization">
+                    <i class="fas fa-cog"></i>
+                </a>
+                <button class="aod-icon-link" onclick="window.exitAlwaysOnDisplay()" title="Exit Full Screen (Esc)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- AOD Content Container -->
+        <div id="aodContentContainer" class="aod-content aod-style-classic">
+            <!-- Album Artwork -->
+            <div class="aod-art-wrapper" id="aodArtWrapper">
+                <img id="aodArtImage" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="aod-art aod-shape-rounded" alt="Album Artwork">
+            </div>
+
+            <!-- Song Info -->
+            <div class="aod-track-info" id="aodTrackInfo">
+                <div id="aodTitle" class="aod-title">No Song Playing</div>
+                <div id="aodArtist" class="aod-artist">AirBeats Ambient Display</div>
+            </div>
+
+            <!-- Scrubber / Progress Bar -->
+            <div class="aod-progress-section" id="aodProgressSection">
+                <div class="aod-progress-bar-container" id="aodProgressBarContainer" onclick="window.onAodProgressClick(event)">
+                    <div class="aod-progress-track">
+                        <div class="aod-progress-fill" id="aodProgressFill"></div>
+                        <div class="aod-progress-thumb" id="aodProgressThumb"></div>
+                    </div>
+                </div>
+                <div class="aod-time-row" id="aodTimeRow">
+                    <span id="aodCurrentTime">0:00</span>
+                    <span id="aodDuration">0:00</span>
+                </div>
+            </div>
+
+            <!-- Playback Controls -->
+            <div class="aod-controls-row" id="aodControlsRow">
+                <button class="aod-ctrl-btn" id="aodPrevBtn" onclick="window.aodPrevTrack()" title="Previous">
+                    <i class="fas fa-step-backward"></i>
+                </button>
+                <button class="aod-play-btn" id="aodPlayBtn" onclick="window.aodTogglePlay()" title="Play / Pause">
+                    <i class="fas fa-play" id="aodPlayIcon"></i>
+                </button>
+                <button class="aod-ctrl-btn" id="aodNextBtn" onclick="window.aodNextTrack()" title="Next">
+                    <i class="fas fa-step-forward"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Touch/Click hint -->
+        <div class="aod-footer-hint">
+            <span>Press <kbd>Esc</kbd> or tap Exit to leave Always On Display</span>
         </div>
     </div>
 

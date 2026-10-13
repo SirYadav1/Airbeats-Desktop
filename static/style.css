@@ -2044,8 +2044,21 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
         box-sizing: border-box;
     }
     
-    .fp-progress-container, .fp-time, .fp-right {
+    .fp-progress-container, .fp-time {
         display: none !important;
+    }
+    .fp-right {
+        display: flex !important;
+        align-items: center;
+        gap: 8px;
+    }
+    .fp-right #shuffleBtn,
+    .fp-right #repeatBtn,
+    .fp-right #lyricsBtn {
+        display: none !important;
+    }
+    .fp-right #playerMoreBtn {
+        display: flex !important;
     }
     
     .fp-middle {
@@ -3995,3 +4008,851 @@ body.right-panel-collapsed .main-content {
 .explore-shelf::-webkit-scrollbar {
     display: none;
 }
+
+/* ==========================================================================
+   ANDROID-STYLE PLAYER MORE BOTTOM SHEET
+   ========================================================================== */
+.player-more-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 99999;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.player-more-sheet-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+.player-more-sheet {
+    width: 100%;
+    max-width: 520px;
+    background: rgba(22, 22, 26, 0.96);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border-radius: 28px 28px 0 0;
+    padding: 12px 18px 28px 22px;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: none;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 85vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+    color: #ffffff;
+    /* Custom sleek matching Firefox scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+    scroll-behavior: smooth;
+}
+/* Best matching slider on the side of the popup */
+.player-more-sheet::-webkit-scrollbar {
+    width: 6px;
+}
+.player-more-sheet::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    margin: 18px 0 12px 0;
+}
+.player-more-sheet::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.18) 100%);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.player-more-sheet::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+    border-color: var(--accent);
+}
+.player-more-sheet::-webkit-scrollbar-thumb:active {
+    background: var(--accent);
+    box-shadow: 0 0 14px var(--accent);
+}
+.player-more-sheet-overlay.open .player-more-sheet {
+    transform: translateY(0);
+}
+.sheet-handle-bar {
+    width: 42px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.25);
+    margin: 4px auto 16px auto;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.sheet-handle-bar:hover {
+    background: rgba(255, 255, 255, 0.45);
+}
+.sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sheet-track-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    flex: 1;
+}
+#sheetTrackImage {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.sheet-track-meta {
+    min-width: 0;
+    flex: 1;
+}
+.sheet-track-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sheet-track-artist {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sheet-close-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    font-size: 15px;
+}
+.sheet-close-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+    transform: scale(1.05);
+}
+
+/* Volume Section inside Sheet */
+.sheet-volume-container {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 16px 18px;
+    margin-bottom: 20px;
+}
+.sheet-volume-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 12px;
+}
+.sheet-volume-header i {
+    margin-right: 6px;
+    color: var(--accent);
+}
+.sheet-volume-val {
+    color: var(--accent);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.sheet-volume-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.sheet-vol-mute-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    font-size: 15px;
+}
+.sheet-vol-mute-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+.sheet-slider-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+.sheet-volume-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.15);
+    outline: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.sheet-volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.sheet-volume-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    background: var(--accent);
+}
+.sheet-volume-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: none;
+    cursor: pointer;
+}
+
+/* Options List in Sheet */
+.sheet-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sheet-option-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid transparent;
+}
+.sheet-option-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.06);
+    transform: translateX(3px);
+}
+.sheet-option-item.aod-highlight {
+    background: rgba(142, 68, 173, 0.1);
+    border-color: rgba(142, 68, 173, 0.25);
+}
+.sheet-option-item.aod-highlight:hover {
+    background: rgba(142, 68, 173, 0.2);
+    border-color: rgba(142, 68, 173, 0.4);
+}
+.sheet-option-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+.sheet-option-icon.aod-icon { background: rgba(142, 68, 173, 0.25); color: #af7ac5; }
+.sheet-option-icon.download-icon { background: rgba(52, 152, 219, 0.25); color: #3498db; }
+.sheet-option-icon.listen-together-icon { background: rgba(46, 204, 113, 0.25); color: #2ecc71; }
+.sheet-option-icon.playlist-icon { background: rgba(241, 196, 15, 0.25); color: #f1c40f; }
+.sheet-option-icon.lyrics-icon { background: rgba(230, 126, 34, 0.25); color: #e67e22; }
+.sheet-option-icon.settings-icon { background: rgba(255, 255, 255, 0.1); color: #ffffff; }
+
+.sheet-option-text {
+    flex: 1;
+    min-width: 0;
+}
+.sheet-option-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+}
+.sheet-option-subtitle {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sheet-option-action {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 13px;
+    padding-right: 4px;
+}
+
+/* ==========================================================================
+   ALWAYS ON DISPLAY (AOD) FULL-SCREEN AMBIENT MODE
+   ========================================================================== */
+.aod-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000000;
+    color: #ffffff;
+    z-index: 999999;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 28px 36px 24px 36px;
+    box-sizing: border-box;
+    overflow: hidden;
+    user-select: none;
+    font-family: inherit;
+    transition: background 0.4s ease;
+}
+
+/* Ambient layers */
+.aod-bg-layer {
+    position: absolute;
+    inset: -40px;
+    background-size: cover;
+    background-position: center;
+    filter: blur(80px);
+    opacity: 0;
+    transition: opacity 0.8s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+.aod-spotlight-layer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 520px;
+    height: 520px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent) 0%, rgba(255, 255, 255, 0.15) 45%, transparent 70%);
+    opacity: 0;
+    filter: blur(50px);
+    pointer-events: none;
+    z-index: 0;
+    transition: all 0.6s ease;
+}
+@keyframes aodSpotlightBreathe {
+    0%, 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.55; }
+    50% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.85; }
+}
+.aod-spotlight-layer.pulse-anim {
+    animation: aodSpotlightBreathe 4s infinite ease-in-out;
+}
+
+/* AOD Top Bar */
+.aod-top-bar {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+.aod-back-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.85);
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.aod-back-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+.aod-clock {
+    font-size: 34px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.95);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 24px rgba(255, 255, 255, 0.12);
+}
+.aod-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.aod-icon-link {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+.aod-icon-link:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    transform: scale(1.05);
+}
+
+/* AOD Main Content */
+.aod-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 540px;
+    margin: auto;
+    text-align: center;
+    transition: all 0.4s ease;
+}
+
+/* Artwork Wrapper */
+.aod-art-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 28px;
+    transition: transform 0.3s ease;
+}
+.aod-art {
+    width: 290px;
+    height: 290px;
+    object-fit: cover;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── 8 Shapes from Android AirBeats ── */
+.aod-shape-rounded {
+    border-radius: 28px;
+}
+.aod-shape-circle {
+    border-radius: 50%;
+}
+.aod-shape-squircle {
+    border-radius: 36%;
+}
+.aod-shape-diamond {
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    border-radius: 0;
+}
+.aod-shape-hexagon {
+    clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+    border-radius: 0;
+}
+.aod-shape-star {
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    border-radius: 0;
+}
+.aod-shape-arch {
+    border-radius: 140px 140px 18px 18px;
+}
+.aod-shape-petal {
+    border-radius: 0 50% 0 50%;
+}
+
+/* Track Info in AOD */
+.aod-track-info {
+    margin-bottom: 24px;
+    width: 100%;
+}
+.aod-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 10px;
+}
+.aod-artist {
+    font-size: 15px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.65);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 10px;
+}
+
+/* Progress / Scrubber in AOD */
+.aod-progress-section {
+    width: 100%;
+    margin-bottom: 24px;
+}
+.aod-progress-bar-container {
+    width: 100%;
+    padding: 10px 0;
+    cursor: pointer;
+}
+.aod-progress-track {
+    position: relative;
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 2px;
+    overflow: visible;
+}
+.aod-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.1s linear;
+}
+.aod-progress-thumb {
+    position: absolute;
+    top: 50%;
+    left: 0%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    transition: left 0.1s linear;
+}
+.aod-time-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+}
+
+/* Controls in AOD */
+.aod-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    width: 100%;
+}
+.aod-ctrl-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.aod-ctrl-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    transform: scale(1.08);
+}
+.aod-play-btn {
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: none;
+    color: #000000;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.2);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.aod-play-btn:hover {
+    transform: scale(1.08);
+    background: var(--accent);
+    color: #ffffff;
+}
+
+/* ── 4 Control Styles from Android AirBeats ── */
+.aod-ctrls-rounded .aod-ctrl-btn {
+    border-radius: 50%;
+}
+.aod-ctrls-square .aod-ctrl-btn {
+    border-radius: 12px;
+}
+.aod-ctrls-square .aod-play-btn {
+    border-radius: 18px;
+}
+.aod-ctrls-accent .aod-ctrl-btn {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--accent);
+}
+.aod-ctrls-accent .aod-play-btn {
+    background: var(--accent);
+    color: #ffffff;
+}
+.aod-ctrls-minimal_flat .aod-ctrl-btn {
+    background: transparent;
+    border: none;
+}
+.aod-ctrls-minimal_flat .aod-play-btn {
+    background: transparent;
+    color: #ffffff;
+    box-shadow: none;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ── 5 AOD Styles ── */
+/* 1. CLASSIC: Centered elegant OLED layout */
+.aod-style-classic .aod-art {
+    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.85);
+}
+
+/* 2. BACKGROUND: Blurred ambient album artwork backdrop */
+.aod-style-background .aod-bg-layer {
+    opacity: 0.38;
+}
+.aod-style-background .aod-art {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+}
+
+/* 3. MINIMAL: Ultra-clean typography and sleek compact art */
+.aod-style-minimal .aod-art {
+    width: 170px;
+    height: 170px;
+}
+.aod-style-minimal .aod-clock {
+    font-size: 44px;
+    font-weight: 200;
+}
+.aod-style-minimal .aod-title {
+    font-size: 20px;
+}
+
+/* 4. LARGE: Edge-to-edge prominent artwork */
+.aod-style-large .aod-art {
+    width: 380px;
+    height: 380px;
+}
+.aod-style-large .aod-content {
+    max-width: 650px;
+}
+
+/* 5. SPOTLIGHT: Radiant pulsing color aura */
+.aod-style-spotlight .aod-spotlight-layer {
+    opacity: 0.7;
+}
+
+/* AOD Footer hint */
+.aod-footer-hint {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.35);
+}
+.aod-footer-hint kbd {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+/* ==========================================================================
+   AOD SETTINGS PAGE STYLING
+   ========================================================================== */
+.aod-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 14px;
+    margin-top: 14px;
+}
+.aod-setting-card {
+    padding: 16px;
+    border-radius: 16px;
+    background: var(--app-bg);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.aod-setting-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+.aod-setting-card.active {
+    border-color: var(--accent);
+    background: rgba(var(--accent-rgb, 255, 0, 85), 0.08);
+}
+.aod-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.aod-card-icon {
+    font-size: 20px;
+    color: var(--accent);
+}
+.aod-card-check {
+    font-size: 14px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.aod-setting-card.active .aod-card-check {
+    opacity: 1;
+}
+.aod-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.aod-card-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* Shape preview chips */
+.aod-shapes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+}
+.aod-shape-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 10px;
+    border-radius: 14px;
+    background: var(--app-bg);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    gap: 10px;
+}
+.aod-shape-chip:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+.aod-shape-chip.active {
+    border-color: var(--accent);
+    background: rgba(var(--accent-rgb, 255, 0, 85), 0.08);
+}
+.aod-shape-preview-box {
+    width: 38px;
+    height: 38px;
+    background: var(--accent);
+}
+.aod-shape-chip-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Switch items */
+.aod-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.aod-switch-row:last-child {
+    border-bottom: none;
+}
+.aod-switch-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.aod-switch-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+}
+/* Toggle Switch Slider */
+.aod-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+}
+.aod-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.aod-slider-toggle {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: rgba(255, 255, 255, 0.16);
+    transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 24px;
+}
+.aod-slider-toggle:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 50%;
+}
+.aod-switch input:checked + .aod-slider-toggle {
+    background-color: var(--accent);
+}
+.aod-switch input:checked + .aod-slider-toggle:before {
+    transform: translateX(20px);
+}
+

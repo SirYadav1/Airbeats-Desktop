@@ -341,6 +341,7 @@ const router = async (forceRefresh = false) => {
         else if (route === 'cached') await renderCachedSongs();
         else if (route === 'userplaylist') await renderSingleUserPlaylist(id);
         else if (route === 'settings' && id === 'appearance') await renderSettingsAppearance();
+        else if (route === 'settings' && id === 'aod') await renderSettingsAOD();
         else if (route === 'settings' && id === 'about') await renderSettingsAbout();
         else if (route === 'settings' && id === 'updates') await renderSettingsUpdates();
         else if (route === 'settings' && (id === 'backup' || !id)) await renderSettingsBackup();
@@ -1724,6 +1725,9 @@ async function loadCurrentTrack() {
         });
     }
 
+    if (window.updateAodTrackInfo) window.updateAodTrackInfo();
+    if (window.updateSheetTrackInfo) window.updateSheetTrackInfo();
+
     // Right panel UI
     const rpTitle = document.getElementById('rightPanelTitle');
     const rpArtist = document.getElementById('rightPanelArtist');
@@ -1859,6 +1863,7 @@ audio.addEventListener('play', () => {
     if (window.electronAPI && window.electronAPI.updateDynamicIsland) {
         window.electronAPI.updateDynamicIsland({ type: 'state', state: 'play' });
     }
+    if (window.updateAodPlaybackState) window.updateAodPlaybackState();
 });
 
 audio.addEventListener('pause', () => {
@@ -1867,6 +1872,7 @@ audio.addEventListener('pause', () => {
     if (window.electronAPI && window.electronAPI.updateDynamicIsland) {
         window.electronAPI.updateDynamicIsland({ type: 'state', state: 'pause' });
     }
+    if (window.updateAodPlaybackState) window.updateAodPlaybackState();
 });
 
 playPauseBtn.addEventListener('click', () => {
@@ -1909,6 +1915,7 @@ window.toggleMute = function() {
         muteBtn.innerHTML = audio.muted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
         muteBtn.style.color = audio.muted ? 'var(--accent)' : '';
     }
+    if (window.updateSheetVolumeUI) window.updateSheetVolumeUI();
 };
 
 window.toggleShuffle = function() {
@@ -1961,6 +1968,10 @@ audio.addEventListener('timeupdate', () => {
 
     if (window.StatsEngine && window.StatsEngine.trackPlaytime) {
         window.StatsEngine.trackPlaytime(audio.currentTime);
+    }
+
+    if (window.updateAodProgress) {
+        window.updateAodProgress();
     }
 
     if (!window.currentTrackScrobbled && audio.duration > 0) {
@@ -2966,6 +2977,20 @@ async function renderSettingsAppearance() {
                   <button class="btn-primary" style="padding: 12px 24px; border-radius: 8px; cursor: pointer;" onclick="window.openListenTogetherModal()">
                       <i class="fas fa-users"></i> Open Session Manager
                   </button>
+              </div>
+          </div>
+
+          <div style="background: var(--search-bg); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
+              <h3 style="margin-top: 0; font-size: 20px;"><i class="fas fa-moon" style="color: var(--accent);"></i> Always On Display</h3>
+              <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Transform your desktop into an ambient OLED music display with custom styles, artwork shapes, and clock.</p>
+              
+              <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                  <button class="btn-primary" style="padding: 12px 24px; border-radius: 8px; cursor: pointer;" onclick="window.activateAlwaysOnDisplay(true)">
+                      <i class="fas fa-moon"></i> Launch AOD
+                  </button>
+                  <a href="#settings/aod" class="btn" style="background: var(--app-bg); color: var(--text-primary); padding: 12px 24px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+                      <i class="fas fa-sliders-h"></i> Customize Settings
+                  </a>
               </div>
           </div>
   
@@ -5493,3 +5518,805 @@ document.addEventListener('DOMContentLoaded', () => {
         obs.observe(pTitle, { childList: true, subtree: true, characterData: true });
     }
 });
+
+// ==========================================================================
+// VOLUME ENGINE & PLAYER MORE BOTTOM SHEET
+// ==========================================================================
+
+// Initialize saved volume
+(function() {
+    try {
+        const savedVol = localStorage.getItem('player_volume');
+        if (savedVol !== null && !isNaN(parseFloat(savedVol))) {
+            audio.volume = Math.max(0, Math.min(1, parseFloat(savedVol)));
+        } else {
+            audio.volume = 1.0;
+        }
+    } catch(e) {}
+})();
+
+window.openPlayerMoreMenu = function() {
+    const overlay = document.getElementById('playerMoreSheetOverlay');
+    const sheet = document.getElementById('playerMoreSheet');
+    if (!overlay) return;
+
+    if (sheet) {
+        sheet.style.transform = '';
+        sheet.style.transition = '';
+    }
+    window.updateSheetTrackInfo();
+    window.updateSheetVolumeUI();
+
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+        overlay.classList.add('open');
+    });
+};
+
+window.closePlayerMoreMenu = function(e) {
+    if (e && e.target && e.target !== e.currentTarget && !e.target.classList.contains('sheet-close-btn') && !e.target.classList.contains('sheet-handle-bar') && !e.target.closest('.sheet-close-btn') && !e.target.closest('.sheet-handle-bar')) {
+        return;
+    }
+    const overlay = document.getElementById('playerMoreSheetOverlay');
+    const sheet = document.getElementById('playerMoreSheet');
+    if (!overlay) return;
+
+    overlay.classList.remove('open');
+    if (sheet) {
+        sheet.style.transform = '';
+    }
+    setTimeout(() => {
+        if (!overlay.classList.contains('open')) {
+            overlay.style.display = 'none';
+        }
+    }, 320);
+};
+
+// Drag & touch down gesture support for the bottom sheet
+(function setupSheetDrag() {
+    let startY = 0;
+    let currentY = 0;
+    let isDragging = false;
+
+    const onStart = (clientY) => {
+        const sheet = document.getElementById('playerMoreSheet');
+        if (!sheet) return;
+        startY = clientY;
+        currentY = clientY;
+        isDragging = true;
+        sheet.style.transition = 'none';
+    };
+
+    const onMove = (clientY) => {
+        if (!isDragging) return;
+        const sheet = document.getElementById('playerMoreSheet');
+        if (!sheet) return;
+        const delta = clientY - startY;
+        if (delta > 0) {
+            sheet.style.transform = `translateY(${delta}px)`;
+        }
+    };
+
+    const onEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        const sheet = document.getElementById('playerMoreSheet');
+        if (!sheet) return;
+        sheet.style.transition = 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
+        const delta = currentY - startY;
+        if (delta > 90) {
+            window.closePlayerMoreMenu();
+        } else {
+            sheet.style.transform = 'translateY(0)';
+        }
+    };
+
+    const initListeners = () => {
+        const handle = document.querySelector('.sheet-handle-bar');
+        const header = document.querySelector('.sheet-header');
+
+        [handle, header].forEach(el => {
+            if (!el) return;
+            el.addEventListener('mousedown', (e) => onStart(e.clientY));
+            el.addEventListener('touchstart', (e) => onStart(e.touches[0].clientY), { passive: true });
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                currentY = e.clientY;
+                onMove(e.clientY);
+            }
+        });
+        window.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                currentY = e.touches[0].clientY;
+                onMove(e.touches[0].clientY);
+            }
+        }, { passive: true });
+
+        window.addEventListener('mouseup', onEnd);
+        window.addEventListener('touchend', onEnd);
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initListeners);
+    } else {
+        initListeners();
+    }
+})();
+
+window.updateSheetTrackInfo = function() {
+    const track = window.getCurrentTrack ? window.getCurrentTrack() : null;
+    const titleEl = document.getElementById('sheetTrackTitle');
+    const artistEl = document.getElementById('sheetTrackArtist');
+    const imgEl = document.getElementById('sheetTrackImage');
+
+    if (track && track.name) {
+        if (titleEl) titleEl.textContent = track.name;
+        if (artistEl) artistEl.textContent = track.artists?.primary?.map(a => a.name).join(', ') || 'Unknown Artist';
+        if (imgEl) {
+            imgEl.src = getHighestQualityImage(track.image);
+            imgEl.classList.remove('skeleton');
+        }
+    } else {
+        if (titleEl) titleEl.textContent = 'No song playing';
+        if (artistEl) artistEl.textContent = 'Select a song to start listening';
+        if (imgEl) {
+            imgEl.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+            imgEl.classList.add('skeleton');
+        }
+    }
+};
+
+window.onSheetVolumeInput = function(val) {
+    const num = parseInt(val, 10);
+    const frac = Math.max(0, Math.min(1, num / 100));
+    audio.volume = frac;
+    if (frac > 0 && audio.muted) {
+        audio.muted = false;
+    }
+    try {
+        localStorage.setItem('player_volume', frac);
+    } catch(e) {}
+    window.updateSheetVolumeUI();
+};
+
+window.updateSheetVolumeUI = function() {
+    const slider = document.getElementById('sheetVolumeSlider');
+    const label = document.getElementById('sheetVolVal');
+    const muteBtn = document.getElementById('sheetMuteBtn');
+    const icon = document.getElementById('sheetVolIcon');
+
+    const cur = Math.round((audio.volume || 0) * 100);
+    const isMuted = audio.muted || cur === 0;
+
+    let iconClass = 'fa-volume-up';
+    if (isMuted) {
+        iconClass = 'fa-volume-mute';
+    } else if (cur < 50) {
+        iconClass = 'fa-volume-down';
+    }
+
+    if (slider) {
+        const sliderVal = isMuted ? 0 : cur;
+        slider.value = sliderVal;
+        slider.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${sliderVal}%, rgba(255,255,255,0.15) ${sliderVal}%, rgba(255,255,255,0.15) 100%)`;
+    }
+    if (label) {
+        label.textContent = isMuted ? 'Muted' : `${cur}%`;
+    }
+    if (muteBtn) {
+        muteBtn.innerHTML = `<i class="fas ${iconClass}"></i>`;
+        muteBtn.style.color = isMuted ? 'var(--accent)' : '#ffffff';
+    }
+    if (icon) {
+        icon.className = `fas ${iconClass}`;
+    }
+};
+
+// Sheet actions
+window.activateAlwaysOnDisplayFromSheet = function() {
+    window.closePlayerMoreMenu();
+    setTimeout(() => {
+        window.activateAlwaysOnDisplay(true);
+    }, 150);
+};
+
+window.downloadFromSheet = function() {
+    window.closePlayerMoreMenu();
+    window.downloadCurrentSong();
+};
+
+window.listenTogetherFromSheet = function() {
+    window.closePlayerMoreMenu();
+    window.openListenTogetherModal();
+};
+
+window.addToPlaylistFromSheet = function() {
+    window.closePlayerMoreMenu();
+    const track = window.getCurrentTrack ? window.getCurrentTrack() : null;
+    if (track) {
+        window.openPlaylistModal(track.id);
+    } else if (window.showToast) {
+        window.showToast('No song is currently playing');
+    }
+};
+
+window.lyricsFromSheet = function() {
+    window.closePlayerMoreMenu();
+    window.toggleLyrics();
+};
+
+window.openAodSettingsFromSheet = function() {
+    window.closePlayerMoreMenu();
+    window.location.hash = '#settings/aod';
+};
+
+// ==========================================================================
+// ALWAYS ON DISPLAY (AOD) ENGINE
+// ==========================================================================
+
+window.aodClockInterval = null;
+window.aodWakeLock = null;
+
+window.activateAlwaysOnDisplay = async function(requestFs = true) {
+    const aod = document.getElementById('alwaysOnDisplayOverlay');
+    if (!aod) return;
+
+    aod.style.display = 'flex';
+    document.body.classList.add('aod-active');
+
+    window.applyAodSettingsToView();
+    window.updateAodTrackInfo();
+    window.updateAodPlaybackState();
+    window.updateAodProgress();
+    window.startAodClock();
+
+    const fsMode = localStorage.getItem('aod_fullscreen_mode') !== 'false';
+    if (requestFs && fsMode) {
+        try {
+            if (!document.fullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    await document.documentElement.webkitRequestFullscreen();
+                }
+            }
+        } catch(e) {
+            console.log('Fullscreen request bypassed:', e);
+        }
+    }
+
+    if ('wakeLock' in navigator) {
+        try {
+            window.aodWakeLock = await navigator.wakeLock.request('screen');
+        } catch(e) {
+            console.log('WakeLock not granted:', e);
+        }
+    }
+};
+
+window.exitAlwaysOnDisplay = async function() {
+    const aod = document.getElementById('alwaysOnDisplayOverlay');
+    if (aod) aod.style.display = 'none';
+    document.body.classList.remove('aod-active');
+
+    if (window.aodClockInterval) {
+        clearInterval(window.aodClockInterval);
+        window.aodClockInterval = null;
+    }
+
+    if (window.aodWakeLock) {
+        try { await window.aodWakeLock.release(); } catch(e){}
+        window.aodWakeLock = null;
+    }
+
+    if (document.fullscreenElement) {
+        try {
+            if (document.exitFullscreen) await document.exitFullscreen();
+            else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+        } catch(e) {}
+    }
+};
+
+window.startAodClock = function() {
+    if (window.aodClockInterval) clearInterval(window.aodClockInterval);
+    const update = () => {
+        const clockEl = document.getElementById('aodClock');
+        if (!clockEl) return;
+        const is24h = localStorage.getItem('aod_clock_24h') !== 'false';
+        const now = new Date();
+        let hours = now.getHours();
+        let minutes = now.getMinutes();
+        const minsStr = minutes < 10 ? '0' + minutes : minutes;
+
+        if (is24h) {
+            const hrsStr = hours < 10 ? '0' + hours : hours;
+            clockEl.textContent = `${hrsStr}:${minsStr}`;
+        } else {
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            clockEl.textContent = `${hours}:${minsStr} ${ampm}`;
+        }
+    };
+    update();
+    window.aodClockInterval = setInterval(update, 1000);
+};
+
+window.applyAodSettingsToView = function() {
+    const content = document.getElementById('aodContentContainer');
+    const art = document.getElementById('aodArtImage');
+    const clock = document.getElementById('aodClock');
+    const title = document.getElementById('aodTitle');
+    const artist = document.getElementById('aodArtist');
+    const progress = document.getElementById('aodProgressSection');
+    const controls = document.getElementById('aodControlsRow');
+    const timeRow = document.getElementById('aodTimeRow');
+    const bgLayer = document.getElementById('aodBackgroundLayer');
+    const spotlightLayer = document.getElementById('aodSpotlightLayer');
+
+    const style = (localStorage.getItem('aod_style') || 'CLASSIC').toLowerCase();
+    const shape = (localStorage.getItem('aod_art_shape') || 'ROUNDED').toLowerCase();
+    const ctrlStyle = (localStorage.getItem('aod_control_style') || 'ROUNDED').toLowerCase();
+
+    const showClock = localStorage.getItem('aod_show_clock') !== 'false';
+    const showTitle = localStorage.getItem('aod_show_title') !== 'false';
+    const showArtist = localStorage.getItem('aod_show_artist') !== 'false';
+    const showProgress = localStorage.getItem('aod_show_progress') !== 'false';
+    const showTime = localStorage.getItem('aod_show_time') !== 'false';
+    const showControls = localStorage.getItem('aod_show_controls') !== 'false';
+    const pulseAnim = localStorage.getItem('aod_spotlight_pulse') !== 'false';
+
+    const artSize = parseFloat(localStorage.getItem('aod_art_size') || '0.65');
+    const darkness = parseFloat(localStorage.getItem('aod_darkness') || '0.6');
+    const spotlightIntensity = parseFloat(localStorage.getItem('aod_spotlight_intensity') || '0.75');
+
+    // Style classes
+    if (content) {
+        content.className = `aod-content aod-style-${style}`;
+    }
+    if (controls) {
+        controls.className = `aod-controls-row aod-ctrls-${ctrlStyle}`;
+    }
+    if (art) {
+        art.className = `aod-art aod-shape-${shape}`;
+        // Dynamic art sizing based on fraction (200px to 380px)
+        const px = Math.round(180 + artSize * 220);
+        art.style.width = style === 'minimal' ? '170px' : (style === 'large' ? '380px' : `${px}px`);
+        art.style.height = style === 'minimal' ? '170px' : (style === 'large' ? '380px' : `${px}px`);
+    }
+
+    // Visibility toggles
+    if (clock) clock.style.display = showClock ? 'block' : 'none';
+    if (title) title.style.display = showTitle ? 'block' : 'none';
+    if (artist) artist.style.display = showArtist ? 'block' : 'none';
+    if (progress) progress.style.display = showProgress ? 'block' : 'none';
+    if (timeRow) timeRow.style.display = showTime ? 'flex' : 'none';
+    if (controls) controls.style.display = showControls ? 'flex' : 'none';
+
+    // Ambient layers
+    if (bgLayer) {
+        bgLayer.style.opacity = style === 'background' ? Math.max(0.1, 1 - darkness).toString() : '0';
+    }
+    if (spotlightLayer) {
+        spotlightLayer.style.opacity = style === 'spotlight' ? spotlightIntensity.toString() : '0';
+        if (pulseAnim && style === 'spotlight') {
+            spotlightLayer.classList.add('pulse-anim');
+        } else {
+            spotlightLayer.classList.remove('pulse-anim');
+        }
+    }
+};
+
+window.updateAodTrackInfo = function() {
+    const aod = document.getElementById('alwaysOnDisplayOverlay');
+    if (!aod || aod.style.display === 'none') return;
+
+    const track = window.getCurrentTrack ? window.getCurrentTrack() : null;
+    const titleEl = document.getElementById('aodTitle');
+    const artistEl = document.getElementById('aodArtist');
+    const artEl = document.getElementById('aodArtImage');
+    const bgLayer = document.getElementById('aodBackgroundLayer');
+    const spotlightLayer = document.getElementById('aodSpotlightLayer');
+
+    if (track && track.name) {
+        const imgUrl = getHighestQualityImage(track.image);
+        if (titleEl) titleEl.textContent = track.name;
+        if (artistEl) artistEl.textContent = track.artists?.primary?.map(a => a.name).join(', ') || 'Unknown Artist';
+        if (artEl) artEl.src = imgUrl;
+        if (bgLayer) bgLayer.style.backgroundImage = `url('${imgUrl}')`;
+    } else {
+        if (titleEl) titleEl.textContent = 'No Song Playing';
+        if (artistEl) artistEl.textContent = 'AirBeats Ambient Display';
+        if (artEl) artEl.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        if (bgLayer) bgLayer.style.backgroundImage = 'none';
+    }
+};
+
+window.updateAodPlaybackState = function() {
+    const icon = document.getElementById('aodPlayIcon');
+    if (icon) {
+        icon.className = audio.paused ? 'fas fa-play' : 'fas fa-pause';
+    }
+};
+
+window.updateAodProgress = function() {
+    const aod = document.getElementById('alwaysOnDisplayOverlay');
+    if (!aod || aod.style.display === 'none') return;
+
+    const curEl = document.getElementById('aodCurrentTime');
+    const durEl = document.getElementById('aodDuration');
+    const fill = document.getElementById('aodProgressFill');
+    const thumb = document.getElementById('aodProgressThumb');
+
+    if (curEl) curEl.textContent = formatTime(audio.currentTime);
+    if (durEl) durEl.textContent = formatTime(audio.duration);
+
+    if (fill && thumb) {
+        const pct = audio.duration ? Math.min(100, Math.max(0, (audio.currentTime / audio.duration) * 100)) : 0;
+        fill.style.width = pct + '%';
+        thumb.style.left = pct + '%';
+    }
+};
+
+window.onAodProgressClick = function(e) {
+    const container = document.getElementById('aodProgressBarContainer');
+    if (!container || !audio.duration) return;
+
+    const rect = container.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const frac = Math.max(0, Math.min(1, clickX / rect.width));
+    audio.currentTime = frac * audio.duration;
+    window.updateAodProgress();
+};
+
+window.aodTogglePlay = function() {
+    const btn = document.getElementById('playPauseBtn');
+    if (btn) btn.click();
+};
+
+window.aodPrevTrack = function() {
+    const btn = document.getElementById('prevBtn');
+    if (btn) btn.click();
+};
+
+window.aodNextTrack = function() {
+    const btn = document.getElementById('nextBtn');
+    if (btn) btn.click();
+};
+
+// Keyboard listener for Escape key to exit AOD or close bottom sheet
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const aod = document.getElementById('alwaysOnDisplayOverlay');
+        if (aod && aod.style.display !== 'none') {
+            window.exitAlwaysOnDisplay();
+        }
+        const sheet = document.getElementById('playerMoreSheetOverlay');
+        if (sheet && sheet.style.display !== 'none') {
+            window.closePlayerMoreMenu();
+        }
+    }
+});
+
+// ==========================================================================
+// ALWAYS ON DISPLAY SETTINGS PAGE (Faithful to Android AlwaysOnDisplaySettings.kt)
+// ==========================================================================
+
+async function renderSettingsAOD() {
+    const curStyle = (localStorage.getItem('aod_style') || 'CLASSIC').toUpperCase();
+    const curShape = (localStorage.getItem('aod_art_shape') || 'ROUNDED').toUpperCase();
+    const curCtrl = (localStorage.getItem('aod_control_style') || 'ROUNDED').toUpperCase();
+
+    const showClock = localStorage.getItem('aod_show_clock') !== 'false';
+    const clock24h = localStorage.getItem('aod_clock_24h') !== 'false';
+    const showTitle = localStorage.getItem('aod_show_title') !== 'false';
+    const showArtist = localStorage.getItem('aod_show_artist') !== 'false';
+    const showProgress = localStorage.getItem('aod_show_progress') !== 'false';
+    const showTime = localStorage.getItem('aod_show_time') !== 'false';
+    const showControls = localStorage.getItem('aod_show_controls') !== 'false';
+    const fullscreenMode = localStorage.getItem('aod_fullscreen_mode') !== 'false';
+    const pulseAnim = localStorage.getItem('aod_spotlight_pulse') !== 'false';
+
+    const artSize = parseFloat(localStorage.getItem('aod_art_size') || '0.65');
+    const darkness = parseFloat(localStorage.getItem('aod_darkness') || '0.6');
+    const spotlightIntensity = parseFloat(localStorage.getItem('aod_spotlight_intensity') || '0.75');
+
+    const styles = [
+        { id: 'CLASSIC', name: 'Classic', icon: 'fa-compress-arrows-alt', desc: 'Centered artwork with time, progress bar, and controls' },
+        { id: 'BACKGROUND', name: 'Background', icon: 'fa-image', desc: 'Blurred, dimmed artwork filling the entire background' },
+        { id: 'MINIMAL', name: 'Minimal', icon: 'fa-circle-notch', desc: 'High-contrast typography with compact artwork disc' },
+        { id: 'LARGE', name: 'Large', icon: 'fa-expand-arrows-alt', desc: 'Edge-to-edge large artwork with floating controls' },
+        { id: 'SPOTLIGHT', name: 'Spotlight', icon: 'fa-sun', desc: 'Vibrant radiant color aura glowing behind the artwork' }
+    ];
+
+    const shapes = [
+        { id: 'ROUNDED', name: 'Rounded', shapeClass: 'aod-shape-rounded' },
+        { id: 'CIRCLE', name: 'Circle', shapeClass: 'aod-shape-circle' },
+        { id: 'SQUIRCLE', name: 'Squircle', shapeClass: 'aod-shape-squircle' },
+        { id: 'DIAMOND', name: 'Diamond', shapeClass: 'aod-shape-diamond' },
+        { id: 'HEXAGON', name: 'Hexagon', shapeClass: 'aod-shape-hexagon' },
+        { id: 'STAR', name: 'Star', shapeClass: 'aod-shape-star' },
+        { id: 'ARCH', name: 'Arch', shapeClass: 'aod-shape-arch' },
+        { id: 'PETAL', name: 'Petal', shapeClass: 'aod-shape-petal' }
+    ];
+
+    const controlStyles = [
+        { id: 'ROUNDED', name: 'Rounded', desc: 'Circular pill frosted buttons' },
+        { id: 'SQUARE', name: 'Square', desc: 'Rounded rectangle buttons' },
+        { id: 'ACCENT', name: 'Accent', desc: 'Solid vibrant accent filled' },
+        { id: 'MINIMAL_FLAT', name: 'Minimal Flat', desc: 'Clean borderless minimalist' }
+    ];
+
+    routerView.innerHTML = `
+        <div class="settings-page" style="padding: 20px 30px; max-width: 860px; margin: 0 auto; color: var(--text-primary);">
+            <div class="hero-header" style="background: none; border-bottom: 1px solid var(--border-color); margin-bottom: 30px; padding: 10px 0 20px 0;">
+                <div class="hero-info">
+                    <div class="hero-title" style="font-size: 32px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-moon" style="color: var(--accent);"></i> Always On Display
+                    </div>
+                    <div class="hero-meta" style="color: var(--text-secondary); font-size: 14px;">
+                        Customize your ambient OLED screen layout, artwork shapes, digital clock, and controls
+                    </div>
+                </div>
+            </div>
+
+            <!-- QUICK LAUNCH ACTION BANNER -->
+            <div style="background: linear-gradient(135deg, rgba(142, 68, 173, 0.25) 0%, var(--search-bg) 100%); padding: 24px; border-radius: 18px; margin-bottom: 28px; border: 1px solid rgba(142, 68, 173, 0.35); display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+                <div>
+                    <h3 style="margin: 0 0 6px 0; font-size: 19px; font-weight: 700;">Live Ambient Screen</h3>
+                    <p style="margin: 0; color: var(--text-secondary); font-size: 13px;">Experience true pitch-black OLED standby mode on your desktop monitor.</p>
+                </div>
+                <button class="btn-primary" onclick="window.activateAlwaysOnDisplay(true)" style="padding: 12px 24px; border-radius: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px;">
+                    <i class="fas fa-play"></i> Launch Always On Display
+                </button>
+            </div>
+
+            <!-- 1. DISPLAY STYLE SELECTION -->
+            <div style="background: var(--search-bg); padding: 26px; border-radius: 18px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.06);">
+                <h3 style="margin-top: 0; font-size: 19px; font-weight: 700;">Display Style</h3>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">Select the visual layout theme for the ambient player (matching the Android app).</p>
+                <div class="aod-settings-grid">
+                    ${styles.map(s => `
+                        <div class="aod-setting-card ${curStyle === s.id ? 'active' : ''}" onclick="window.setAodStyle('${s.id}')">
+                            <div class="aod-card-header">
+                                <i class="fas ${s.icon} aod-card-icon"></i>
+                                <i class="fas fa-check-circle aod-card-check"></i>
+                            </div>
+                            <div class="aod-card-title">${s.name}</div>
+                            <div class="aod-card-desc">${s.desc}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- 2. ARTWORK SHAPE SELECTION -->
+            <div style="background: var(--search-bg); padding: 26px; border-radius: 18px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.06);">
+                <h3 style="margin-top: 0; font-size: 19px; font-weight: 700;">Artwork Shape</h3>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">Choose geometric clipping or rounding for the album art cover.</p>
+                <div class="aod-shapes-grid">
+                    ${shapes.map(shp => `
+                        <div class="aod-shape-chip ${curShape === shp.id ? 'active' : ''}" onclick="window.setAodShape('${shp.id}')">
+                            <div class="aod-shape-preview-box ${shp.shapeClass}"></div>
+                            <div class="aod-shape-chip-name">${shp.name}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- 3. CONTROL BUTTON STYLE -->
+            <div style="background: var(--search-bg); padding: 26px; border-radius: 18px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.06);">
+                <h3 style="margin-top: 0; font-size: 19px; font-weight: 700;">Playback Controls Style</h3>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">Change the styling of the previous, play/pause, and next buttons.</p>
+                <div class="aod-settings-grid">
+                    ${controlStyles.map(c => `
+                        <div class="aod-setting-card ${curCtrl === c.id ? 'active' : ''}" onclick="window.setAodControlStyle('${c.id}')">
+                            <div class="aod-card-header">
+                                <i class="fas fa-play aod-card-icon"></i>
+                                <i class="fas fa-check-circle aod-card-check"></i>
+                            </div>
+                            <div class="aod-card-title">${c.name}</div>
+                            <div class="aod-card-desc">${c.desc}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- 4. VISIBILITY & CLOCK TOGGLES -->
+            <div style="background: var(--search-bg); padding: 26px; border-radius: 18px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.06);">
+                <h3 style="margin-top: 0; font-size: 19px; font-weight: 700;">Screen Elements & Visibility</h3>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">Toggle which components appear on the ambient display.</p>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">Show Digital Clock</div>
+                        <div class="aod-switch-sub">Display real-time clock at the top of the screen</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${showClock ? 'checked' : ''} onchange="window.setAodPref('aod_show_clock', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">24-Hour Clock Format</div>
+                        <div class="aod-switch-sub">Use 24-hour time (e.g. 19:45) instead of 12-hour AM/PM</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${clock24h ? 'checked' : ''} onchange="window.setAodPref('aod_clock_24h', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">Show Song Title</div>
+                        <div class="aod-switch-sub">Display the current song title below the artwork</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${showTitle ? 'checked' : ''} onchange="window.setAodPref('aod_show_title', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">Show Artist Name</div>
+                        <div class="aod-switch-sub">Display contributing artist names</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${showArtist ? 'checked' : ''} onchange="window.setAodPref('aod_show_artist', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">Show Progress Bar & Scrubber</div>
+                        <div class="aod-switch-sub">Interactive timeline progress with clickable seek</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${showProgress ? 'checked' : ''} onchange="window.setAodPref('aod_show_progress', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">Show Time Labels</div>
+                        <div class="aod-switch-sub">Display elapsed and remaining song duration timestamps</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${showTime ? 'checked' : ''} onchange="window.setAodPref('aod_show_time', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">Show Playback Controls</div>
+                        <div class="aod-switch-sub">Display previous, play/pause, and next buttons</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${showControls ? 'checked' : ''} onchange="window.setAodPref('aod_show_controls', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">Fullscreen Mode</div>
+                        <div class="aod-switch-sub">Automatically enter true browser fullscreen when activating AOD</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${fullscreenMode ? 'checked' : ''} onchange="window.setAodPref('aod_fullscreen_mode', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+
+                <div class="aod-switch-row">
+                    <div>
+                        <div class="aod-switch-label">Spotlight Aura Pulse Animation</div>
+                        <div class="aod-switch-sub">Gentle breathing pulse effect on the ambient spotlight</div>
+                    </div>
+                    <label class="aod-switch">
+                        <input type="checkbox" ${pulseAnim ? 'checked' : ''} onchange="window.setAodPref('aod_spotlight_pulse', this.checked)">
+                        <span class="aod-slider-toggle"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 5. SLIDERS: SIZING, DARKNESS, SPOTLIGHT -->
+            <div style="background: var(--search-bg); padding: 26px; border-radius: 18px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.06);">
+                <h3 style="margin-top: 0; font-size: 19px; font-weight: 700;">Dimensions & Intensity</h3>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 18px;">Fine-tune artwork dimensions and background glow parameters.</p>
+
+                <!-- Art Size Slider -->
+                <div style="margin-bottom: 22px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 14px; font-weight: 600;">Artwork Size</span>
+                        <span id="aodArtSizeVal" style="color: var(--accent); font-weight: 700;">${Math.round(artSize * 100)}%</span>
+                    </div>
+                    <input type="range" min="35" max="85" value="${Math.round(artSize * 100)}" class="sheet-volume-slider" oninput="window.setAodSlider('aod_art_size', this.value / 100, 'aodArtSizeVal', '%')">
+                </div>
+
+                <!-- Darkness Dimming Slider -->
+                <div style="margin-bottom: 22px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 14px; font-weight: 600;">Background Dimming (Darkness)</span>
+                        <span id="aodDarknessVal" style="color: var(--accent); font-weight: 700;">${Math.round(darkness * 100)}%</span>
+                    </div>
+                    <input type="range" min="20" max="90" value="${Math.round(darkness * 100)}" class="sheet-volume-slider" oninput="window.setAodSlider('aod_darkness', this.value / 100, 'aodDarknessVal', '%')">
+                </div>
+
+                <!-- Spotlight Intensity Slider -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 14px; font-weight: 600;">Spotlight Glow Intensity</span>
+                        <span id="aodSpotlightVal" style="color: var(--accent); font-weight: 700;">${Math.round(spotlightIntensity * 100)}%</span>
+                    </div>
+                    <input type="range" min="30" max="100" value="${Math.round(spotlightIntensity * 100)}" class="sheet-volume-slider" oninput="window.setAodSlider('aod_spotlight_intensity', this.value / 100, 'aodSpotlightVal', '%')">
+                </div>
+            </div>
+
+            <!-- RESET TO DEFAULTS BUTTON -->
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 40px;">
+                <button class="btn" onclick="window.resetAodDefaults()" style="background: rgba(255,255,255,0.08); color: var(--text-secondary); padding: 10px 20px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; border: none;">
+                    <i class="fas fa-undo"></i> Reset to Default Settings
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Highlight sidebar
+    const items = document.querySelectorAll('#sidebar-settings-menu .nav-item');
+    items.forEach(el => el.classList.remove('active'));
+    const current = document.getElementById('nav-settings-aod');
+    if (current) current.classList.add('active');
+}
+
+window.setAodStyle = function(id) {
+    localStorage.setItem('aod_style', id);
+    renderSettingsAOD();
+};
+
+window.setAodShape = function(id) {
+    localStorage.setItem('aod_art_shape', id);
+    renderSettingsAOD();
+};
+
+window.setAodControlStyle = function(id) {
+    localStorage.setItem('aod_control_style', id);
+    renderSettingsAOD();
+};
+
+window.setAodPref = function(key, val) {
+    localStorage.setItem(key, val ? 'true' : 'false');
+};
+
+window.setAodSlider = function(key, val, labelId, suffix = '') {
+    localStorage.setItem(key, val.toString());
+    const label = document.getElementById(labelId);
+    if (label) label.textContent = `${Math.round(val * 100)}${suffix}`;
+};
+
+window.resetAodDefaults = function() {
+    localStorage.setItem('aod_style', 'CLASSIC');
+    localStorage.setItem('aod_art_shape', 'ROUNDED');
+    localStorage.setItem('aod_control_style', 'ROUNDED');
+    localStorage.setItem('aod_show_clock', 'true');
+    localStorage.setItem('aod_clock_24h', 'true');
+    localStorage.setItem('aod_show_title', 'true');
+    localStorage.setItem('aod_show_artist', 'true');
+    localStorage.setItem('aod_show_progress', 'true');
+    localStorage.setItem('aod_show_time', 'true');
+    localStorage.setItem('aod_show_controls', 'true');
+    localStorage.setItem('aod_fullscreen_mode', 'true');
+    localStorage.setItem('aod_spotlight_pulse', 'true');
+    localStorage.setItem('aod_art_size', '0.65');
+    localStorage.setItem('aod_darkness', '0.6');
+    localStorage.setItem('aod_spotlight_intensity', '0.75');
+    renderSettingsAOD();
+};

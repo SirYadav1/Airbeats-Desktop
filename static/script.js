@@ -218,7 +218,6 @@ window.toggleHeart = (event, trackId) => {
     }
     saveFavorites();
     
-    // Sync Now Playing button if applicable
     const rpLikeBtn = document.getElementById('likeBtn') || document.querySelector('.np-title-row .fa-heart');
     if (rpLikeBtn && currentQueue[currentIndex]?.id === trackId) {
         rpLikeBtn.className = isFav ? 'fas fa-heart' : 'far fa-heart';
@@ -502,7 +501,6 @@ async function renderHome() {
     document.getElementById('globalLoading').style.display = 'flex';
     routerView.innerHTML = '';
 
-    // 1. Get cached state
     const history = JSON.parse(localStorage.getItem('playHistory') || '[]');
     const playedArtists = JSON.parse(localStorage.getItem('playedArtists') || '[]');
     const lastPlayedAlbumStr = localStorage.getItem('lastPlayedAlbum');
@@ -514,7 +512,6 @@ async function renderHome() {
     let mfySongs = [];
     let artistsForYou = [];
     
-    // Start trending and popular artists fetches immediately
     const trendingPromise = fetch('/api/search/songs?query=latest&limit=15').then(r => r.json());
     const artistsPromise = fetch('/api/search/artists?query=trending&limit=6').then(r => r.json());
 
@@ -562,7 +559,6 @@ async function renderHome() {
 
     let html = '';
 
-    // Render Popular Artists
     let popularHtml = `
     <div class="section-header">
         <h2>Popular artists</h2>
@@ -583,7 +579,6 @@ async function renderHome() {
     }
     popularHtml += `</div>`;
 
-    // Render Trending Songs
     let trendingHtml = `
     <div class="section-header">
         <h2>Trending songs</h2>
@@ -618,13 +613,10 @@ async function renderHome() {
     trendingHtml += `</table></div>`;
 
     if (isNewUser) {
-        // NEW USER VIEW
         html += popularHtml;
         html += trendingHtml;
     } else {
-        // RETURNING USER VIEW
         
-        // 1. Hero Banner
         if (lastPlayedAlbum && lastPlayedAlbum.image) { const bannerImg = getHighestQualityImage(lastPlayedAlbum.image);
             html += `
             <div class="banner-card" style="background: url('${lastPlayedAlbum.image}') no-repeat center center; background-size: cover; cursor: pointer; overflow: hidden; position: relative;" onclick="if('${lastPlayedAlbum.id}') window.location.hash='#album/${lastPlayedAlbum.id}'">
@@ -638,7 +630,6 @@ async function renderHome() {
             </div>`;
         }
 
-        // 2. Made For You
         if (mfySongs.length > 0) {
             window.currentMfyQueue = mfySongs;
             let mfyHtml = `
@@ -684,13 +675,10 @@ async function renderHome() {
             html += afyHtml;
         }
 
-        // 3. Popular Artists
         html += popularHtml;
 
-        // 4. Trending Songs
         html += trendingHtml;
 
-        // 5. Recently Played
         html += `
         <div class="section-header">
             <h2>Recently played</h2>
@@ -1413,7 +1401,6 @@ window.scrobbleCurrentTrack = function() {
     let track = window.getCurrentTrack();
     if (!track) return;
 
-    // Save to playedArtists
     if (track.artists && track.artists.primary && track.artists.primary.length > 0) {
         let playedArtists = JSON.parse(localStorage.getItem('playedArtists') || '[]');
         const pArtist = track.artists.primary[0];
@@ -1986,7 +1973,6 @@ window.createAndAddToPlaylist = function() {
     if (currentTrackToAddToPlaylist) {
         window.addToPlaylist(newPlaylist.id);
     } else {
-        // Just refresh the modal if we are just creating
         window.openPlaylistModal(null);
     }
 };
@@ -2506,7 +2492,6 @@ window.playMadeForYouShuffle = async function() {
             return;
         }
         
-        // Let Python do the shuffling
         const res = await fetch('/api/shuffle', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},

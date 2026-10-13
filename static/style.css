@@ -5638,3 +5638,671 @@ body.route-home .shelf-scroll-row {
     color: #fff;
 }
 
+
+/* ==================== LISTEN TOGETHER (Matching Android) ==================== */
+.lt-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 100000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.25s ease;
+}
+.lt-modal-card {
+    background: #14171d;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 26px;
+    width: 480px;
+    max-width: 95vw;
+    max-height: 88vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+    position: relative;
+    padding: 24px;
+    box-sizing: border-box;
+}
+.lt-glass-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+    padding: 16px;
+    margin-bottom: 14px;
+}
+.lt-session-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.lt-live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+}
+.lt-pulse-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #4caf50;
+    box-shadow: 0 0 10px #4caf50;
+    animation: newsPulse 1.8s infinite;
+}
+.lt-badge-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(29, 185, 84, 0.12);
+    border: 1px solid rgba(29, 185, 84, 0.25);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 50px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.lt-track-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(0, 0, 0, 0.28);
+    padding: 12px 14px;
+    border-radius: 14px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.lt-track-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.lt-track-info {
+    flex: 1;
+    min-width: 0;
+}
+.lt-track-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.lt-track-artist {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 3px;
+}
+.lt-participant-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    margin-bottom: 6px;
+}
+.lt-avatar-initial {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(29, 185, 84, 0.2);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.lt-host-pill {
+    background: rgba(29, 185, 84, 0.15);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   LYRICS 3-DOT MENU POPUP & MODALS (MATCHING ANDROID LYRICSMENU.KT)
+   ========================================================================== */
+.lyrics-status-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+    letter-spacing: 0.3px;
+}
+.lyrics-status-badge.synced {
+    background: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+    border: 1px solid rgba(46, 204, 113, 0.3);
+}
+.lyrics-status-badge.translated {
+    background: rgba(155, 89, 182, 0.25);
+    color: #bb86fc;
+    border: 1px solid rgba(187, 134, 252, 0.4);
+}
+
+.lyrics-active-trans-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(155, 89, 182, 0.18);
+    border: 1px solid rgba(187, 134, 252, 0.35);
+    border-radius: 14px;
+    margin-bottom: 14px;
+}
+.lyrics-clear-trans-btn {
+    background: rgba(231, 76, 60, 0.15);
+    color: #ff6b6b;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+.lyrics-clear-trans-btn:hover {
+    background: rgba(231, 76, 60, 0.3);
+    color: #fff;
+}
+
+/* Modern 2x2 Action Cards */
+.lyrics-cards-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.lyrics-action-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+}
+.lyrics-action-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-2px);
+}
+.lyrics-action-card.primary {
+    background: rgba(29, 185, 84, 0.12);
+    border-color: rgba(29, 185, 84, 0.3);
+}
+.lyrics-action-card.primary:hover {
+    background: rgba(29, 185, 84, 0.2);
+    border-color: rgba(29, 185, 84, 0.45);
+}
+.lyrics-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.lyrics-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #ffffff;
+}
+.lyrics-action-card.primary .lyrics-card-icon {
+    background: rgba(29, 185, 84, 0.2);
+    color: var(--accent);
+}
+.lyrics-card-badge {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #000;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+.lyrics-card-badge.active-badge {
+    background: #bb86fc;
+    color: #000;
+}
+.lyrics-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+.lyrics-card-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Providers List Section */
+.lyrics-providers-section {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 18px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+.lyrics-providers-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.lyrics-active-provider-tag {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(29, 185, 84, 0.18);
+    color: var(--accent);
+    border: 1px solid rgba(29, 185, 84, 0.3);
+}
+.lyrics-providers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.lyrics-provider-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.lyrics-provider-row:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+.lyrics-provider-row.active {
+    background: rgba(29, 185, 84, 0.15);
+    border-color: rgba(29, 185, 84, 0.4);
+}
+.lyrics-provider-row-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.lyrics-provider-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.07);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.lyrics-provider-row.active .lyrics-provider-icon {
+    background: var(--accent);
+    color: #000;
+}
+.lyrics-provider-info {
+    display: flex;
+    flex-direction: column;
+}
+.lyrics-provider-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+}
+.lyrics-provider-desc {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+.lyrics-provider-pill {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(29, 185, 84, 0.2);
+    color: var(--accent);
+}
+
+/* Modal Dialogs */
+.custom-modal-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    z-index: 100005;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+.custom-modal-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+.custom-modal-box {
+    width: 92%;
+    max-width: 500px;
+    background: rgba(22, 22, 26, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.8);
+    color: #fff;
+    transform: scale(0.95);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+}
+.custom-modal-overlay.open .custom-modal-box {
+    transform: scale(1);
+}
+.custom-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.custom-modal-header h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+}
+.custom-text-input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #fff;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: inherit;
+}
+.custom-text-input:focus {
+    border-color: var(--accent);
+}
+.modal-btn-primary {
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+    padding: 9px 18px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: opacity 0.2s;
+}
+.modal-btn-primary:hover {
+    opacity: 0.9;
+}
+.modal-btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.modal-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+.modal-btn-danger {
+    background: rgba(231, 76, 60, 0.2);
+    color: #ff6b6b;
+    border: 1px solid rgba(231, 76, 60, 0.4);
+    font-weight: 700;
+    padding: 9px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Prompt Chips */
+.lyrics-prompt-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.prompt-chip {
+    padding: 5px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ddd;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s;
+}
+.prompt-chip:hover {
+    background: rgba(29, 185, 84, 0.15);
+    border-color: rgba(29, 185, 84, 0.4);
+    color: var(--accent);
+}
+
+/* Switch row */
+.lyrics-switch-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    cursor: pointer;
+}
+.custom-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* AI Selector card */
+.lyrics-ai-selector-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.lyrics-ai-selector-card:hover {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+/* Engine settings accordion */
+.lyrics-ai-engine-settings {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+}
+.engine-settings-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* Status box & Mini Spinner */
+.lyrics-ai-status-box {
+    background: rgba(29, 185, 84, 0.12);
+    border: 1px solid rgba(29, 185, 84, 0.3);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-top: 10px;
+}
+.lyrics-mini-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Search Results List */
+.lyrics-search-results {
+    max-height: 250px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.lyrics-search-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.lyrics-search-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* Language List */
+.lyrics-lang-list {
+    max-height: 350px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.lyrics-lang-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.lyrics-lang-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+.lyrics-lang-item.selected {
+    background: rgba(29, 185, 84, 0.15);
+    border: 1px solid rgba(29, 185, 84, 0.4);
+    font-weight: 700;
+}
+.popular-lang-pill {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(187, 134, 252, 0.2);
+    color: #bb86fc;
+}
+
+/* Edit Textarea */
+.lyrics-edit-textarea {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 12px;
+    color: #fff;
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    box-sizing: border-box;
+    resize: vertical;
+    outline: none;
+}
+.lyrics-edit-textarea:focus {
+    border-color: var(--accent);
+}
+
+/* Translated Subtitle line on lyrics screen */
+.lyrics-translated-subtitle {
+    display: block;
+    font-size: 16px;
+    font-weight: 500;
+    color: rgba(187, 134, 252, 0.85);
+    margin-top: 4px;
+    line-height: 1.3;
+    transition: color 0.3s;
+}
+.lyric-line:hover .lyrics-translated-subtitle {
+    color: rgba(187, 134, 252, 1);
+}
+

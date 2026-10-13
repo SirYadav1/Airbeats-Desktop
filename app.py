@@ -539,93 +539,112 @@ def parse_lrc(lrc_string):
                 
     return parsed_lines
 
+import lyrics_engine
+
 def get_lyrics():
-    song_name = request.args.get('s', '')
-    artist_name = request.args.get('a', '')
-    duration = request.args.get('d', '')
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*'
-    }
-    
-    artist_queries = [artist_name]
-    if ',' in artist_name:
-        individual = [a.strip() for a in artist_name.split(',') if a.strip()]
-        for a in individual:
-            if a != artist_name:
-                artist_queries.append(a)
-    
-    force_refresh = request.args.get('force') == '1'
-    
-    for artist_q in artist_queries:
-        if not force_refresh:
-            # 1. Try Boidu API
-            try:
-                url = f"https://lyrics-api.boidu.dev/getLyrics?s={requests.utils.quote(song_name)}&a={requests.utils.quote(artist_q)}"
-                if duration: url += f"&d={duration}"
-                res = requests.get(url, headers=headers, timeout=10)
-                if res.ok:
-                    data = res.json()
-                    ttml = data.get('ttml')
-                    if ttml:
-                        parsed = parse_ttml(ttml)
-                        if parsed:
-                            return jsonify(parsed)
-            except Exception as e:
-                print("Boidu API Error:", e)
-                
-            # 2. Try Boidu Kugou API
-            try:
-                url = f"https://lyrics-api.boidu.dev/kugou/getLyrics?s={requests.utils.quote(song_name)}&a={requests.utils.quote(artist_q)}"
-                if duration: url += f"&d={duration}"
-                res = requests.get(url, headers=headers, timeout=10)
-                if res.ok:
-                    data = res.json()
-                    ttml = data.get('ttml')
-                    if ttml:
-                        parsed = parse_ttml(ttml)
-                        if parsed:
-                            return jsonify(parsed)
-            except Exception as e:
-                print("Boidu Kugou API Error:", e)
+    song_name = request.args.get('s', '').strip()
+    artist_name = request.args.get('a', '').strip()
+    duration_str = request.args.get('d', '0')
+    duration = int(float(duration_str)) if duration_str and duration_str.replace('.', '', 1).isdigit() else 0
+    video_id = request.args.get('vid') or request.args.get('song_id') or ''
+    album = request.args.get('album', '')
+    provider = request.args.get('provider')
+    preferred = request.args.get('preferred')
+    format_type = request.args.get('format', '')
 
-        # 3. Try LRCLIB API
-        try:
-            q = f"{song_name} {artist_q}".strip()
-            url = f"https://lrclib.net/api/search?q={requests.utils.quote(q)}"
-            res = requests.get(url, headers=headers, timeout=10)
-            
-            if res.ok:
-                data = res.json()
-                if isinstance(data, list) and len(data) > 0:
-                    for idx, item in enumerate(data):
-                        if item.get('syncedLyrics'):
-                            parsed = parse_lrc(item['syncedLyrics'])
-                            if parsed:
-                                return jsonify(parsed)
-        except Exception as e:
-            print("[LRCLIB] EXCEPTION OCCURRED:", e)
+    yt_inst = getattr(backend, 'yt', None)
 
-    # 4. Final fallback: try with just the song name, no artist
-    try:
-        url = f"https://lrclib.net/api/search?q={requests.utils.quote(song_name)}"
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.ok:
-            data = res.json()
-            if isinstance(data, list) and len(data) > 0:
-                for item in data:
-                    if item.get('syncedLyrics'):
-                        parsed = parse_lrc(item['syncedLyrics'])
-                        if parsed:
-                            return jsonify(parsed)
-    except Exception as e:
-        print("[LRCLIB] Song-only fallback error:", e)
+    if provider:
+        raw, is_synced = lyrics_engine.fetch_from_provider(
+            provider, song_name, artist_name, duration, video_id, album, yt_inst
+        )
+        if raw:
+            parsed = lyrics_engine.parse_any_lyrics(raw, duration)
+            if parsed:
+                if format_type == 'array':
+                    return jsonify(parsed)
+                return jsonify({
+                    "success": True,
+                    "provider": lyrics_engine.PROVIDER_NAMES.get(provider.lower(), provider),
+                    "provider_key": provider.lower(),
+                    "is_synced": is_synced,
+                    "raw": raw,
+                    "parsed": parsed
+                })
+        return jsonify({"error": f"Lyrics not found on provider '{provider}'."}), 404
+
+    res = lyrics_engine.get_lyrics_unified(
+        song_name, artist_name, duration, video_id, album, preferred, yt_inst
+    )
+    if res.get('success'):
+        if format_type == 'array':
+            return jsonify(res['parsed'])
+        return jsonify(res)
 
     return jsonify({"error": "No synchronized lyrics found."}), 404
 
 import backend
 backend.add_yt_routes(app, get_lyrics)
+
+@app.route('/api/lyrics/providers')
+def api_lyrics_providers():
+    providers_list = [
+        {"key": "lrclib", "name": "LRC Lib", "icon": "fa-music", "desc": "Community synchronized LRC database"},
+        {"key": "kugou", "name": "KuGou", "icon": "fa-headphones-alt", "desc": "KuGou music synchronized lyrics"},
+        {"key": "simpmusic", "name": "SimpMusic", "icon": "fa-compact-disc", "desc": "SimpMusic synchronized lyrics API"},
+        {"key": "unison", "name": "Unison", "icon": "fa-wave-square", "desc": "Unison database search & video matcher"},
+        {"key": "youly", "name": "YouLyPlus", "icon": "fa-star", "desc": "YouLyPlus TTML & LRC mirror network"},
+        {"key": "megalobiz", "name": "Megalobiz", "icon": "fa-globe", "desc": "Megalobiz community LRC search"},
+        {"key": "paxsenix", "name": "Paxsenix (Multi-Source)", "icon": "fa-layer-group", "desc": "Spotify, Musixmatch & Apple Music aggregator"},
+        {"key": "portato", "name": "BetterLyrics (Portato)", "icon": "fa-file-audio", "desc": "Portato lyrics mirror"},
+        {"key": "betterlyrics", "name": "BetterLyrics", "icon": "fa-align-left", "desc": "High-fidelity TTML syllable sync"},
+        {"key": "youtube_subtitles", "name": "YouTube subtitles", "icon": "fa-closed-captioning", "desc": "Timed video subtitles and captions"},
+        {"key": "youtube_music", "name": "YouTube Music", "icon": "fa-play-circle", "desc": "Official YouTube Music lyrics"}
+    ]
+    return jsonify({"success": True, "providers": providers_list})
+
+@app.route('/api/lyrics/search')
+def api_lyrics_search():
+    song_name = request.args.get('s', '').strip()
+    artist_name = request.args.get('a', '').strip()
+    duration_str = request.args.get('d', '0')
+    duration = int(float(duration_str)) if duration_str and duration_str.replace('.', '', 1).isdigit() else 0
+    video_id = request.args.get('vid') or request.args.get('song_id') or ''
+    album = request.args.get('album', '')
+    yt_inst = getattr(backend, 'yt', None)
+
+    results = lyrics_engine.search_lyrics_all_providers(
+        song_name, artist_name, duration, video_id, album, yt_inst
+    )
+    return jsonify({"success": True, "results": results})
+
+@app.route('/api/lyrics/translate', methods=['POST'])
+def api_lyrics_translate():
+    data = request.get_json(silent=True) or {}
+    lines = data.get('lines', [])
+    target_code = data.get('target_language_code', 'hi-Latn')
+    target_name = data.get('target_language_name')
+    api_key = data.get('api_key', '')
+    base_url = data.get('base_url', '')
+    model = data.get('model', '')
+    mode = data.get('mode', 'Literal')
+    custom_prompt = data.get('custom_prompt')
+    provider = data.get('provider', 'OpenRouter')
+
+    result = lyrics_engine.translate_lyrics_ai(
+        lines=lines,
+        target_language_code=target_code,
+        target_language_name=target_name,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        mode=mode,
+        custom_prompt=custom_prompt,
+        provider=provider
+    )
+    if result.get('success'):
+        return jsonify(result)
+    return jsonify(result), 400
 
 if __name__ == '__main__':
     host = os.environ.get('HOST', '0.0.0.0')

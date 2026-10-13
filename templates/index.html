@@ -549,6 +549,10 @@
                     <div id="playerTitle" class="fp-title">No song</div>
                     <div id="playerArtist" class="fp-artist">Artist</div>
                 </div>
+                <div id="lt-mini-indicator" onclick="window.openListenTogetherModal()" style="display: none; cursor: pointer; align-items: center; gap: 6px; background: rgba(29, 185, 84, 0.15); border: 1px solid rgba(29, 185, 84, 0.35); padding: 4px 10px; border-radius: 50px; font-size: 11px; font-weight: 800; color: var(--accent); margin-left: 12px; white-space: nowrap;" title="Listen Together Session Active">
+                    <span style="width: 7px; height: 7px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 6px var(--accent); animation: newsPulse 1.8s infinite;"></span>
+                    <span id="lt-mini-indicator-text">SYNCED</span>
+                </div>
             </div>
             
             <div class="fp-center">
@@ -636,6 +640,9 @@
                         <button class="lyrics-close-btn" id="lyricsRefreshBtn" onclick="window.forceRefreshLyrics()" title="Refresh Lyrics">
                             <i class="fas fa-sync-alt"></i>
                         </button>
+                        <button class="lyrics-close-btn" id="lyricsMenuBtn" onclick="window.openLyricsMenu()" title="Lyrics Options">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
                         <button class="lyrics-close-btn" onclick="window.closeLyrics()" title="Close Lyrics">
                             <i class="fas fa-chevron-down"></i>
                         </button>
@@ -645,6 +652,293 @@
                 <div id="lyricsContent" class="lyrics-container"></div>
             </div>
             
+        </div>
+    </div>
+
+    <!-- LYRICS 3-DOT BOTTOM SHEET (Android Style LyricsMenu) -->
+    <div class="player-more-sheet-overlay" id="lyricsMenuSheetOverlay" onclick="window.closeLyricsMenu(event)" style="display: none;">
+        <div class="player-more-sheet lyrics-menu-sheet" id="lyricsMenuSheet" onclick="event.stopPropagation()">
+            <div class="sheet-handle-bar" onclick="window.closeLyricsMenu()"></div>
+            
+            <div class="sheet-header">
+                <div class="sheet-track-info">
+                    <img id="lyricsSheetCover" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="skeleton" alt="Artwork">
+                    <div class="sheet-track-meta">
+                        <div id="lyricsSheetTitle" class="sheet-track-title">Song Title</div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div id="lyricsSheetArtist" class="sheet-track-artist">Artist</div>
+                            <span id="lyricsSheetBadge" class="lyrics-status-badge">Synced</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="sheet-close-btn" onclick="window.closeLyricsMenu()" title="Close menu">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Active Translation Banner -->
+            <div id="lyricsActiveTranslationBanner" class="lyrics-active-trans-banner" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-magic" style="color: var(--accent);"></i>
+                    <div>
+                        <div style="font-size: 13px; font-weight: 700; color: #fff;">AI Translation Active</div>
+                        <div id="lyricsActiveTransLang" style="font-size: 11px; color: var(--text-secondary);">Hinglish (Hindi in English)</div>
+                    </div>
+                </div>
+                <button class="lyrics-clear-trans-btn" onclick="window.clearAiTranslation()" title="Clear translation">
+                    <i class="fas fa-trash-alt"></i> Clear
+                </button>
+            </div>
+
+            <!-- 2x2 Action Cards (Translate, Search, Refetch, Edit) -->
+            <div class="lyrics-cards-grid">
+                <!-- Translate Card -->
+                <div class="lyrics-action-card primary" onclick="window.openAiTranslateModal()">
+                    <div class="lyrics-card-top">
+                        <div class="lyrics-card-icon"><i class="fas fa-language"></i></div>
+                        <span class="lyrics-card-badge" id="lyricsTranslateBadge">AI</span>
+                    </div>
+                    <div class="lyrics-card-title">Translate</div>
+                    <div class="lyrics-card-sub" id="lyricsTranslateSub">AI Translation</div>
+                </div>
+
+                <!-- Search Card -->
+                <div class="lyrics-action-card" onclick="window.openLyricsSearchModal()">
+                    <div class="lyrics-card-top">
+                        <div class="lyrics-card-icon"><i class="fas fa-search"></i></div>
+                    </div>
+                    <div class="lyrics-card-title">Search</div>
+                    <div class="lyrics-card-sub">Search online</div>
+                </div>
+
+                <!-- Refetch Card -->
+                <div class="lyrics-action-card" onclick="window.refetchLyrics()">
+                    <div class="lyrics-card-top">
+                        <div class="lyrics-card-icon"><i class="fas fa-sync-alt"></i></div>
+                    </div>
+                    <div class="lyrics-card-title">Refetch</div>
+                    <div class="lyrics-card-sub">Reload lyrics</div>
+                </div>
+
+                <!-- Edit Card -->
+                <div class="lyrics-action-card" onclick="window.openLyricsEditModal()">
+                    <div class="lyrics-card-top">
+                        <div class="lyrics-card-icon"><i class="fas fa-edit"></i></div>
+                    </div>
+                    <div class="lyrics-card-title">Edit</div>
+                    <div class="lyrics-card-sub">Edit lyrics text</div>
+                </div>
+            </div>
+
+            <!-- Providers List Section -->
+            <div class="lyrics-providers-section">
+                <div class="lyrics-providers-header">
+                    <div>
+                        <div style="font-size: 14px; font-weight: 700; color: #fff;">Lyrics Providers</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">All 11 sources from AirBeats app &bull; Click to switch</div>
+                    </div>
+                    <span id="lyricsCurrentProviderTag" class="lyrics-active-provider-tag">LRC Lib</span>
+                </div>
+
+                <div class="lyrics-providers-list" id="lyricsProvidersList">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LYRICS SEARCH MODAL -->
+    <div class="custom-modal-overlay" id="lyricsSearchModal" onclick="window.closeLyricsSearchModal(event)" style="display: none;">
+        <div class="custom-modal-box" onclick="event.stopPropagation()">
+            <div class="custom-modal-header">
+                <h3><i class="fas fa-search" style="color: var(--accent); margin-right: 8px;"></i> Search Lyrics</h3>
+                <button class="sheet-close-btn" onclick="window.closeLyricsSearchModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="custom-modal-body">
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Song Title</label>
+                    <input type="text" id="lyricsSearchTitleInput" class="custom-text-input" placeholder="Title">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Artist Name</label>
+                    <input type="text" id="lyricsSearchArtistInput" class="custom-text-input" placeholder="Artist">
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 16px;">
+                    <button class="modal-btn-secondary" onclick="window.searchLyricsOnlineWeb()"><i class="fas fa-globe"></i> Web Search</button>
+                    <button class="modal-btn-primary" onclick="window.executeLyricsSearch()"><i class="fas fa-search"></i> Search Providers</button>
+                </div>
+                
+                <div id="lyricsSearchResultsContainer" class="lyrics-search-results">
+                    <!-- Results populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LYRICS EDIT MODAL -->
+    <div class="custom-modal-overlay" id="lyricsEditModal" onclick="window.closeLyricsEditModal(event)" style="display: none;">
+        <div class="custom-modal-box edit-modal-box" onclick="event.stopPropagation()">
+            <div class="custom-modal-header">
+                <h3><i class="fas fa-edit" style="color: var(--accent); margin-right: 8px;"></i> Edit Lyrics</h3>
+                <button class="sheet-close-btn" onclick="window.closeLyricsEditModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="custom-modal-body">
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Edit synchronized LRC tags (e.g. <code>[01:23.45] line</code>) or plain text lyrics.</p>
+                <textarea id="lyricsEditTextarea" class="lyrics-edit-textarea" rows="12"></textarea>
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;">
+                    <button class="modal-btn-secondary" onclick="window.closeLyricsEditModal()">Cancel</button>
+                    <button class="modal-btn-primary" onclick="window.saveEditedLyrics()"><i class="fas fa-save"></i> Save & Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LYRICS AI TRANSLATE MODAL -->
+    <div class="custom-modal-overlay" id="lyricsAiTranslateModal" onclick="window.closeAiTranslateModal(event)" style="display: none;">
+        <div class="custom-modal-box ai-modal-box" onclick="event.stopPropagation()">
+            <div class="custom-modal-header">
+                <h3><i class="fas fa-magic" style="color: var(--accent); margin-right: 8px;"></i> AI Lyrics Translation</h3>
+                <button class="sheet-close-btn" onclick="window.closeAiTranslateModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="custom-modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <!-- Target Language Selector Card -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 4px;">Translate to Language</label>
+                    <div class="lyrics-ai-selector-card" onclick="window.openLangSelectorModal()">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-globe" style="color: var(--accent);"></i>
+                            <span id="lyricsAiTargetLangDisplay" style="font-size: 14px; font-weight: 600;">Hinglish (Hindi in English)</span>
+                        </div>
+                        <i class="fas fa-chevron-right" style="color: var(--text-secondary); font-size: 12px;"></i>
+                    </div>
+                </div>
+
+                <!-- Translation Mode & Prompt Presets -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 4px;">Translation Mode</label>
+                    <select id="lyricsAiModeSelect" class="custom-text-input" onchange="window.onAiModeChange(this.value)">
+                        <option value="Literal">Literal (Accurate & Poetic)</option>
+                        <option value="Poetic">Poetic & Rhyming</option>
+                        <option value="Hinglish">Hinglish (Conversational Romanized)</option>
+                        <option value="Romanized">Romanized (Simple Latin Alphabet)</option>
+                        <option value="Transcribed">Transcribed (Phonetic Native Script)</option>
+                        <option value="Custom">Custom Prompt</option>
+                    </select>
+                </div>
+
+                <!-- Pre-added Prompt Presets Chips -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Pre-added Prompt Presets</label>
+                    <div class="lyrics-prompt-chips">
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('poetic')"><i class="fas fa-music"></i> Rhyming & Poetic</span>
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('hinglish')"><i class="fas fa-pen-fancy"></i> Singable Hinglish</span>
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('literal')"><i class="fas fa-check-double"></i> Accurate Meaning</span>
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('romanized')"><i class="fas fa-font"></i> Latin Romanized</span>
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('meaning')"><i class="fas fa-lightbulb"></i> Song Meaning</span>
+                    </div>
+                </div>
+
+                <!-- Custom Prompt Instructions Textarea -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Custom Prompt Instructions (Optional)</label>
+                    <textarea id="lyricsAiCustomPrompt" class="custom-text-input" rows="2" placeholder="e.g. Translate into rhyming Hinglish keeping rhythmic syllables singable"></textarea>
+                </div>
+
+                <!-- Replace Original Lyrics Switch -->
+                <div class="lyrics-switch-row" onclick="window.toggleReplaceOriginalLyrics()">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Replace Original Lyrics</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Show translated text directly in player instead of subtitle beneath</div>
+                    </div>
+                    <input type="checkbox" id="lyricsReplaceOriginalToggle" class="custom-checkbox" onclick="event.stopPropagation()" onchange="window.onReplaceOriginalToggleChange(this.checked)">
+                </div>
+
+                <!-- AI Model & Provider Accordion / Section -->
+                <div class="lyrics-ai-engine-settings">
+                    <div class="engine-settings-toggle" onclick="window.toggleAiEngineSettings()">
+                        <span style="font-size: 12px; font-weight: 600; color: #fff;"><i class="fas fa-sliders-h"></i> AI Provider & Model Settings</span>
+                        <i id="aiEngineSettingsChevron" class="fas fa-chevron-down" style="font-size: 11px;"></i>
+                    </div>
+                    <div id="aiEngineSettingsBody" style="display: none; padding-top: 10px;">
+                        <div style="margin-bottom: 8px;">
+                            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">AI Provider</label>
+                            <select id="lyricsAiProviderSelect" class="custom-text-input" onchange="window.onAiProviderChange(this.value)">
+                                <option value="OpenRouter">OpenRouter</option>
+                                <option value="Gemini">Gemini (Google AI Studio)</option>
+                                <option value="OpenAI">OpenAI</option>
+                                <option value="DeepL">DeepL</option>
+                                <option value="Claude">Claude (Anthropic)</option>
+                                <option value="Groq">Groq</option>
+                                <option value="Perplexity">Perplexity</option>
+                                <option value="XAi">xAI (Grok)</option>
+                                <option value="Mistral">Mistral AI</option>
+                                <option value="Nvidia">Nvidia NIM</option>
+                                <option value="OrcaRouter">OrcaRouter</option>
+                                <option value="Puter">Puter</option>
+                                <option value="Custom">Custom Provider</option>
+                            </select>
+                        </div>
+
+                        <div style="margin-bottom: 8px;">
+                            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Model</label>
+                            <select id="lyricsAiModelSelect" class="custom-text-input" onchange="window.onAiModelChange(this.value)">
+                                <!-- Populated dynamically -->
+                            </select>
+                            <input type="text" id="lyricsAiCustomModelInput" class="custom-text-input" style="display: none; margin-top: 6px;" placeholder="Enter custom model ID">
+                        </div>
+
+                        <div id="lyricsAiBaseUrlContainer" style="margin-bottom: 8px; display: none;">
+                            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Base URL</label>
+                            <input type="text" id="lyricsAiBaseUrlInput" class="custom-text-input" placeholder="https://api...">
+                        </div>
+
+                        <div style="margin-bottom: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="font-size: 11px; color: var(--text-secondary);">API Key</label>
+                                <a id="lyricsAiKeyPortalLink" href="https://openrouter.ai/keys" target="_blank" style="font-size: 11px; color: var(--accent); text-decoration: none;">Get Key <i class="fas fa-external-link-alt"></i></a>
+                            </div>
+                            <div style="position: relative;">
+                                <input type="password" id="lyricsAiApiKeyInput" class="custom-text-input" placeholder="Enter API Key">
+                                <i id="lyricsAiKeyToggleEye" class="fas fa-eye" onclick="window.toggleAiKeyVisibility()" style="position: absolute; right: 12px; top: 12px; cursor: pointer; color: var(--text-secondary);"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress & Status Indicator -->
+                <div id="lyricsAiStatusContainer" class="lyrics-ai-status-box" style="display: none;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="lyrics-mini-spinner"></div>
+                        <div>
+                            <div id="lyricsAiStatusTitle" style="font-size: 12px; font-weight: 700; color: #fff;">Translating...</div>
+                            <div id="lyricsAiStatusSub" style="font-size: 11px; color: var(--text-secondary);">Preparing lines...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+                    <button class="modal-btn-secondary" onclick="window.closeAiTranslateModal()">Cancel</button>
+                    <button id="lyricsAiClearBtn" class="modal-btn-danger" onclick="window.clearAiTranslation()" style="display: none;"><i class="fas fa-trash"></i> Clear</button>
+                    <button id="lyricsAiSubmitBtn" class="modal-btn-primary" onclick="window.executeAiTranslation()"><i class="fas fa-magic"></i> Translate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LYRICS LANGUAGE SELECTOR MODAL -->
+    <div class="custom-modal-overlay" id="lyricsLangSelectorModal" onclick="window.closeLangSelectorModal(event)" style="display: none;">
+        <div class="custom-modal-box lang-modal-box" onclick="event.stopPropagation()">
+            <div class="custom-modal-header">
+                <h3><i class="fas fa-language" style="color: var(--accent); margin-right: 8px;"></i> Select Target Language</h3>
+                <button class="sheet-close-btn" onclick="window.closeLangSelectorModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="custom-modal-body">
+                <input type="text" id="lyricsLangSearchInput" class="custom-text-input" placeholder="Search language..." oninput="window.filterLanguages(this.value)">
+                <div id="lyricsLangListContainer" class="lyrics-lang-list">
+                    <!-- Populated dynamically with all 52 languages -->
+                </div>
+            </div>
         </div>
     </div>
 

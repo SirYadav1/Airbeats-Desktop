@@ -4492,7 +4492,7 @@ document.getElementById('cm-copy-link').addEventListener('click', () => {
     ctxMenu.style.display = 'none';
     if (!ctxActiveData) return;
     const typeStr = ctxActiveData.type === 'queue' ? 'song' : ctxActiveData.type;
-    const link = "https://play.airbeats.app/" + typeStr + "?id=" + ctxActiveData.id;
+    const link = "https://play.airbeats.org/" + typeStr + "?id=" + ctxActiveData.id;
     navigator.clipboard.writeText(link).then(() => {
         if(window.showToast) window.showToast("Link copied to clipboard");
     });
@@ -4502,7 +4502,7 @@ document.getElementById('cm-share').addEventListener('click', () => {
     ctxMenu.style.display = 'none';
     if (!ctxActiveData) return;
     const typeStr = ctxActiveData.type === 'queue' ? 'song' : ctxActiveData.type;
-    const link = "https://play.airbeats.app/" + typeStr + "?id=" + ctxActiveData.id;
+    const link = "https://play.airbeats.org/" + typeStr + "?id=" + ctxActiveData.id;
     if (navigator.share) {
         navigator.share({
             title: ctxActiveData.title,

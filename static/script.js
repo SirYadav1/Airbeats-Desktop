@@ -303,14 +303,16 @@ const router = async (forceRefresh = false) => {
     }
     
     // Toggle sidebar state for settings
+    const isSettingsLike = route === 'settings' || route === 'developer-news' || route === 'developer_news' || route === 'news';
     if (window.updateSidebarState) {
-        window.updateSidebarState(route === 'settings');
+        window.updateSidebarState(isSettingsLike);
     }
 
     // Update active nav
         document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(el => el.classList.remove('active'));
     let navId = `nav-${route}`;
     if (route === 'settings') navId = `nav-settings-${id}`;
+    if (route === 'developer-news' || route === 'developer_news' || route === 'news') navId = 'nav-settings-developer-news';
         if (document.getElementById(navId)) {
         document.getElementById(navId).classList.add('active');
     }
@@ -322,7 +324,7 @@ const router = async (forceRefresh = false) => {
     const scrollContainer = document.querySelector('.scroll-container');
     if (scrollContainer) scrollContainer.onscroll = null;
 
-    const noCacheRoutes = ['playlists', 'userplaylist', 'favorites', 'history', 'cached', 'stats'];
+    const noCacheRoutes = ['playlists', 'userplaylist', 'favorites', 'history', 'cached', 'stats', 'developer-news', 'developer_news', 'news'];
     if (!forceRefresh && window.pageCache[cacheKey] && !noCacheRoutes.includes(route)) {
         routerView.innerHTML = window.pageCache[cacheKey];
         globalLoading.style.display = 'none';
@@ -332,7 +334,7 @@ const router = async (forceRefresh = false) => {
     routerView.innerHTML = '';
     globalLoading.style.display = 'flex';
 
-    const offlineAllowedRoutes = ['cached', 'favorites', 'history', 'playlists', 'userplaylist', 'settings', 'stats'];
+    const offlineAllowedRoutes = ['cached', 'favorites', 'history', 'playlists', 'userplaylist', 'settings', 'stats', 'developer-news', 'developer_news', 'news'];
     if (!navigator.onLine && !offlineAllowedRoutes.includes(route)) {
         globalLoading.style.display = 'none';
         routerView.innerHTML = `<div style='display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; text-align: center; color: var(--text-secondary);'>
@@ -364,9 +366,11 @@ const router = async (forceRefresh = false) => {
         else if (route === 'userplaylist') await renderSingleUserPlaylist(id);
         else if (route === 'settings' && id === 'appearance') await renderSettingsAppearance();
         else if (route === 'settings' && id === 'aod') await renderSettingsAOD();
+        else if (route === 'settings' && (id === 'developer-news' || id === 'developer_news' || id === 'news')) await renderDeveloperNews();
         else if (route === 'settings' && id === 'about') await renderSettingsAbout();
         else if (route === 'settings' && id === 'updates') await renderSettingsUpdates();
         else if (route === 'settings' && (id === 'backup' || !id)) await renderSettingsBackup();
+        else if (route === 'developer-news' || route === 'developer_news' || route === 'news') await renderDeveloperNews();
         else routerView.innerHTML = `<h2>Page Not Found</h2>`;
     } catch (e) {
         console.error('Route error', e);
@@ -422,7 +426,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Delay router slightly to allow browser to fetch loader.json and fire load event
     setTimeout(router, 100);
 
-    
+    // Initialize News From Developers
+    if (window.DeveloperNewsManager) {
+        window.DeveloperNewsManager.init();
+    }
 });
 
 const searchSuggestions = document.getElementById('searchSuggestions');
@@ -6724,3 +6731,566 @@ window.searchArtistAvatar = function(artistName, callback) {
         })
         .catch(() => {});
 };
+
+// ==========================================
+// NEWS FROM DEVELOPERS (matching Android app)
+// ==========================================
+
+function parseDeveloperNewsMarkdown(rawMd) {
+    if (!rawMd) return '';
+    let escaped = rawMd
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // Fenced code blocks
+    escaped = escaped.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        return `<pre class="dev-news-code-block"><code>${code.trim()}</code></pre>`;
+    }).replace(/```([\s\S]*?)```/g, (match, code) => {
+        return `<pre class="dev-news-code-block"><code>${code.trim()}</code></pre>`;
+    });
+
+    const lines = escaped.split('\n');
+    const out = [];
+    let inList = false;
+    let listType = 'ul';
+
+    function parseInline(text) {
+        if (!text) return '';
+        // 1. Markdown Links [text](url)
+        let res = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1 <i class="fas fa-external-link-alt" style="font-size:10px;"></i></a>');
+        // 2. Standalone URLs
+        res = res.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2 <i class="fas fa-external-link-alt" style="font-size:10px;"></i></a>');
+        // 3. Bold, Italic, Inline Code
+        res = res
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/_([^_]+)_/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code class="dev-news-inline-code">$1</code>');
+        return res;
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('<pre class="dev-news-code-block">')) {
+            if (inList) { out.push(`</${listType}>`); inList = false; }
+            out.push(trimmed);
+            continue;
+        }
+
+        // Horizontal Rule ---, ***
+        if (/^[-*_]{3,}$/.test(trimmed)) {
+            if (inList) { out.push(`</${listType}>`); inList = false; }
+            out.push('<hr>');
+            continue;
+        }
+
+        // Heading # Title
+        const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+            if (inList) { out.push(`</${listType}>`); inList = false; }
+            const level = headingMatch[1].length;
+            out.push(`<h${level}>${parseInline(headingMatch[2])}</h${level}>`);
+            continue;
+        }
+
+        // Blockquote > Quote
+        if (trimmed.startsWith('&gt;') || trimmed.startsWith('>')) {
+            if (inList) { out.push(`</${listType}>`); inList = false; }
+            const q = trimmed.replace(/^(&gt;|>)\s*/, '');
+            out.push(`<blockquote>${parseInline(q)}</blockquote>`);
+            continue;
+        }
+
+        // Bullet List - Item, * Item, • Item
+        const ulMatch = trimmed.match(/^[-*•]\s+(.*)$/);
+        if (ulMatch) {
+            if (!inList || listType !== 'ul') {
+                if (inList) out.push(`</${listType}>`);
+                out.push('<ul>');
+                inList = true;
+                listType = 'ul';
+            }
+            out.push(`<li>${parseInline(ulMatch[1])}</li>`);
+            continue;
+        }
+
+        // Numbered List 1. Item
+        const olMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+        if (olMatch) {
+            if (!inList || listType !== 'ol') {
+                if (inList) out.push(`</${listType}>`);
+                out.push('<ol>');
+                inList = true;
+                listType = 'ol';
+            }
+            out.push(`<li>${parseInline(olMatch[1])}</li>`);
+            continue;
+        }
+
+        if (inList) {
+            out.push(`</${listType}>`);
+            inList = false;
+        }
+
+        if (!trimmed) continue;
+        out.push(`<p>${parseInline(trimmed)}</p>`);
+    }
+
+    if (inList) {
+        out.push(`</${listType}>`);
+    }
+
+    return out.join('\n');
+}
+
+function extractDeveloperNewsTeaser(rawMarkdown) {
+    if (!rawMarkdown) return '';
+    return rawMarkdown
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => !l.startsWith('#') && !l.startsWith('```') && !l.startsWith('---') && !l.startsWith('***'))
+        .join(' ')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/^(&gt;|>)\s*/g, '')
+        .trim() || rawMarkdown;
+}
+
+function formatDeveloperNewsDate(timestamp) {
+    if (!timestamp) return '';
+    try {
+        const date = new Date(Number(timestamp));
+        if (isNaN(date.getTime())) return '';
+        const day = String(date.getDate()).padStart(2, '0');
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const month = months[date.getMonth()];
+        const year = date.getFullYear();
+        return `${day} ${month} ${year}`;
+    } catch {
+        return '';
+    }
+}
+
+window.DeveloperNewsManager = {
+    newsList: [],
+    isSyncing: false,
+    searchQuery: '',
+    isSearchActive: false,
+    activeDetailItem: null,
+
+    init() {
+        this.loadCachedNews();
+        this.updateBadge();
+        this.refresh();
+    },
+
+    loadCachedNews() {
+        try {
+            const cached = localStorage.getItem('airbeats_cached_developer_news');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    this.newsList = parsed;
+                    this.updateBadge();
+                }
+            }
+        } catch (e) {
+            console.warn('DeveloperNewsManager: load cached error', e);
+        }
+    },
+
+    async refresh() {
+        if (this.isSyncing) return;
+        this.isSyncing = true;
+        this.updateSyncSpinners(true);
+
+        try {
+            const res = await fetch('/api/developer_news');
+            if (res.ok) {
+                const json = await res.json();
+                const data = Array.isArray(json) ? json : (json.data || []);
+                if (Array.isArray(data)) {
+                    this.newsList = data;
+                    localStorage.setItem('airbeats_cached_developer_news', JSON.stringify(data));
+                    this.updateBadge();
+                    this.checkStartupPopup(data);
+                }
+            }
+        } catch (e) {
+            console.warn('DeveloperNewsManager: refresh error', e);
+        } finally {
+            this.isSyncing = false;
+            this.updateSyncSpinners(false);
+            const hash = window.location.hash || '';
+            if (hash.includes('developer-news') || hash.includes('developer_news') || hash === '#news') {
+                if (!this.activeDetailItem) {
+                    window.renderDeveloperNews();
+                }
+            }
+        }
+    },
+
+    updateSyncSpinners(isSpinning) {
+        const btn = document.getElementById('devNewsRefreshBtn');
+        if (btn) {
+            if (isSpinning) btn.classList.add('spinning');
+            else btn.classList.remove('spinning');
+        }
+    },
+
+    updateBadge() {
+        const badge = document.getElementById('devNewsBadgeDot');
+        if (!badge) return;
+        const lastSeen = Number(localStorage.getItem('airbeats_last_seen_news_ts') || 0);
+        const hasUnread = this.newsList.some(item => (Number(item.timestamp) || 0) > lastSeen);
+        badge.style.display = hasUnread ? 'block' : 'none';
+    },
+
+    markAllAsRead() {
+        const maxTs = this.newsList.reduce((max, item) => Math.max(max, Number(item.timestamp) || 0), 0);
+        localStorage.setItem('airbeats_last_seen_news_ts', String(maxTs || Date.now()));
+        this.updateBadge();
+    },
+
+    getDismissedPopupIds() {
+        try {
+            const raw = localStorage.getItem('airbeats_dismissed_news_popups');
+            return raw ? JSON.parse(raw) : [];
+        } catch {
+            return [];
+        }
+    },
+
+    dismissPopup(newsId) {
+        const dismissed = new Set(this.getDismissedPopupIds());
+        if (newsId) dismissed.add(newsId);
+        // Mark all current items as dismissed to guarantee no subsequent popups appear (matching Android app)
+        this.newsList.forEach(item => {
+            if (item.id) dismissed.add(item.id);
+        });
+        localStorage.setItem('airbeats_dismissed_news_popups', JSON.stringify(Array.from(dismissed)));
+
+        const overlay = document.getElementById('devNewsPopupDialog');
+        if (overlay) overlay.remove();
+    },
+
+    checkStartupPopup(items) {
+        if (!items || items.length === 0) return;
+        const dismissed = new Set(this.getDismissedPopupIds());
+        const candidate = items.find(item => item.showPopup && item.id && !dismissed.has(item.id));
+        if (candidate) {
+            // Dismiss other current popups to prevent chaining
+            items.forEach(item => {
+                if (item.id !== candidate.id && item.id) dismissed.add(item.id);
+            });
+            localStorage.setItem('airbeats_dismissed_news_popups', JSON.stringify(Array.from(dismissed)));
+
+            this.showPopupDialog(candidate);
+        }
+    },
+
+    showPopupDialog(item) {
+        const existing = document.getElementById('devNewsPopupDialog');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'devNewsPopupDialog';
+        overlay.className = 'dev-news-popup-overlay';
+
+        const tagText = item.tag || 'Announcement';
+        const imgHtml = item.imageUrl ? `
+            <div class="dev-news-popup-img-wrap">
+                <img src="${item.imageUrl}" alt="${item.title}" class="dev-news-popup-img" />
+                <div class="dev-news-popup-img-shadow"></div>
+                <span class="dev-news-popup-tag">${tagText}</span>
+            </div>
+        ` : `
+            <div style="padding-top: 24px; display: flex; flex-direction: column; align-items: center;">
+                <div class="dev-news-pulse-badge">
+                    <i class="fas fa-newspaper"></i>
+                </div>
+                <span class="dev-news-tag-pill" style="font-size: 11px; margin-top: 4px;">${tagText}</span>
+            </div>
+        `;
+
+        const actionBtnHtml = item.actionUrl ? `
+            <button class="dev-news-popup-btn-primary" onclick="window.open('${item.actionUrl}', '_blank'); window.DeveloperNewsManager.dismissPopup('${item.id}');">
+                <i class="fas fa-external-link-alt"></i> ${item.actionText || 'Learn More'}
+            </button>
+        ` : '';
+
+        overlay.innerHTML = `
+            <div class="dev-news-popup-card" onclick="event.stopPropagation()">
+                ${imgHtml}
+                <div class="dev-news-popup-content">
+                    <h3 class="dev-news-popup-title">${item.title}</h3>
+                    <div class="dev-news-popup-message dev-news-markdown-content">
+                        ${parseDeveloperNewsMarkdown(item.message)}
+                    </div>
+                    <div class="dev-news-popup-actions">
+                        ${actionBtnHtml}
+                        <div style="display: flex; gap: 10px; width: 100%;">
+                            <button class="dev-news-popup-btn-secondary" style="flex: 1;" onclick="window.DeveloperNewsManager.dismissPopup('${item.id}');">
+                                Dismiss
+                            </button>
+                            <button class="dev-news-popup-btn-secondary" style="flex: 1; background: var(--accent); color: #000; font-weight: 800; border: none;" onclick="window.DeveloperNewsManager.dismissPopup('${item.id}'); window.location.hash = '#settings/developer-news';">
+                                All News
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.dismissPopup(item.id);
+            }
+        });
+
+        document.body.appendChild(overlay);
+    }
+};
+
+window.renderDeveloperNews = async function() {
+    const container = document.getElementById('router-view');
+    if (!container) return;
+
+    const globalLoading = document.getElementById('globalLoading');
+    if (globalLoading) globalLoading.style.display = 'none';
+
+    window.DeveloperNewsManager.activeDetailItem = null;
+    window.DeveloperNewsManager.markAllAsRead();
+
+    const m = window.DeveloperNewsManager;
+    let list = m.newsList;
+    const query = m.searchQuery.trim().toLowerCase();
+
+    if (query) {
+        list = list.filter(item =>
+            (item.title && item.title.toLowerCase().includes(query)) ||
+            (item.message && item.message.toLowerCase().includes(query)) ||
+            (item.author && item.author.toLowerCase().includes(query)) ||
+            (item.tag && item.tag.toLowerCase().includes(query))
+        );
+    }
+
+    const topBarHtml = `
+        <div class="dev-news-topbar">
+            <div class="dev-news-topbar-left">
+                <button class="dev-news-back-btn" onclick="window.history.back()" title="Back">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <div class="dev-news-title">News From Developers</div>
+            </div>
+            <div class="dev-news-topbar-actions">
+                <button class="dev-news-icon-btn ${m.isSearchActive ? 'active' : ''}" onclick="window.toggleDevNewsSearch()" title="Search">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button class="dev-news-icon-btn ${m.isSyncing ? 'spinning' : ''}" id="devNewsRefreshBtn" onclick="window.refreshDevNews()" title="Refresh">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+        ${m.isSearchActive ? `
+            <div class="dev-news-search-bar">
+                <i class="fas fa-search" style="color: var(--text-secondary); font-size: 14px;"></i>
+                <input type="text" class="dev-news-search-input" id="devNewsSearchInput" placeholder="Search announcements..." value="${m.searchQuery}" oninput="window.onDevNewsSearchChange(this.value)">
+                ${m.searchQuery ? `
+                    <button style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px;" onclick="window.onDevNewsSearchChange('')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                ` : ''}
+            </div>
+        ` : ''}
+    `;
+
+    const totalCount = m.newsList.length;
+    const heroCardHtml = `
+        <div class="dev-news-hero-card">
+            <div class="dev-news-hero-icon-wrap">
+                <i class="fas fa-newspaper" style="font-size: 24px; color: var(--accent);"></i>
+            </div>
+            <div>
+                <div class="dev-news-hero-title">New Announcements</div>
+                <div class="dev-news-hero-count">${totalCount === 1 ? '1 article' : totalCount + ' articles'}</div>
+            </div>
+        </div>
+    `;
+
+    let contentHtml = '';
+    if (m.isSyncing && m.newsList.length === 0) {
+        contentHtml = `
+            <div style="text-align: center; padding: 70px 20px;">
+                <div class="lottie-spinner" style="width: 50px; height: 50px; margin: 0 auto 16px;"></div>
+                <div style="font-weight: 700; color: #fff; font-size: 16px;">Loading announcements...</div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-top: 6px;">Connecting to Firebase Realtime Database</div>
+            </div>
+        `;
+    } else if (list.length === 0) {
+        const title = m.isSyncing ? 'Checking for News...' : (query ? 'No Announcements Match' : 'No News Yet');
+        const desc = m.isSyncing
+            ? 'Connecting to Firebase to fetch developer announcements.'
+            : (query ? 'Try searching with different keywords.' : 'Stay tuned! Announcements and updates from the developers will appear here.');
+        contentHtml = `
+            <div style="text-align: center; padding: 70px 20px;">
+                <div class="dev-news-hero-icon-wrap" style="width: 80px; height: 80px; margin: 0 auto 18px; background: rgba(29, 185, 84, 0.15);">
+                    <i class="fas fa-newspaper" style="font-size: 34px; color: var(--accent);"></i>
+                </div>
+                <div style="font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 8px;">${title}</div>
+                <div style="font-size: 14px; color: var(--text-secondary); max-width: 420px; margin: 0 auto; line-height: 1.5;">${desc}</div>
+            </div>
+        `;
+    } else {
+        const cardsHtml = list.map(item => {
+            const authorName = item.author || item.tag || 'Developer';
+            const dateStr = formatDeveloperNewsDate(item.timestamp);
+            const pillText = `${authorName} · ${dateStr}`;
+            const teaser = extractDeveloperNewsTeaser(item.message);
+            const imgHtml = item.imageUrl ? `
+                <div class="dev-news-card-img-wrap">
+                    <img src="${item.imageUrl}" alt="${item.title}" class="dev-news-card-img" loading="lazy" />
+                </div>
+            ` : '';
+
+            return `
+                <div class="dev-news-card" onclick="window.openDeveloperNewsDetail('${item.id}')">
+                    ${imgHtml}
+                    <div class="dev-news-card-body">
+                        <div class="dev-news-meta-row">
+                            <span class="dev-news-pill">${pillText}</span>
+                            ${item.tag ? `<span class="dev-news-tag-pill">${item.tag}</span>` : ''}
+                        </div>
+                        <div class="dev-news-card-title">${item.title}</div>
+                        <div class="dev-news-card-teaser">${teaser}</div>
+                        <div class="dev-news-card-footer">
+                            <button class="dev-news-more-btn" onclick="event.stopPropagation(); window.openDeveloperNewsDetail('${item.id}')">more</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        contentHtml = `
+            ${heroCardHtml}
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                ${cardsHtml}
+            </div>
+        `;
+    }
+
+    container.innerHTML = `
+        <div class="dev-news-container">
+            ${topBarHtml}
+            ${contentHtml}
+        </div>
+    `;
+
+    // Highlight active settings sidebar menu item
+    const items = document.querySelectorAll('#sidebar-settings-menu .nav-item');
+    items.forEach(el => el.classList.remove('active'));
+    const navItem = document.getElementById('nav-settings-developer-news');
+    if (navItem) navItem.classList.add('active');
+
+    if (m.isSearchActive) {
+        const input = document.getElementById('devNewsSearchInput');
+        if (input) {
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+        }
+    }
+};
+
+window.openDeveloperNewsDetail = function(newsId) {
+    const item = window.DeveloperNewsManager.newsList.find(x => x.id === newsId);
+    if (!item) return;
+
+    window.DeveloperNewsManager.activeDetailItem = item;
+
+    const container = document.getElementById('router-view');
+    if (!container) return;
+
+    const authorName = item.author || item.tag || 'Developer';
+    const dateStr = formatDeveloperNewsDate(item.timestamp);
+    const pillText = `${authorName} · ${dateStr}`;
+    const headerTitle = item.tag || 'Announcement';
+
+    const externalBtn = item.actionUrl ? `
+        <button class="dev-news-icon-btn" onclick="window.open('${item.actionUrl}', '_blank')" title="Open Link">
+            <i class="fas fa-external-link-alt" style="color: var(--accent);"></i>
+        </button>
+    ` : '<div style="width: 36px;"></div>';
+
+    const actionBottomBtn = item.actionUrl ? `
+        <button class="dev-news-action-btn-large" onclick="window.open('${item.actionUrl}', '_blank')">
+            <i class="fas fa-external-link-alt"></i> ${item.actionText || 'Open Link'}
+        </button>
+    ` : '';
+
+    const heroImgHtml = item.imageUrl ? `
+        <img src="${item.imageUrl}" alt="${item.title}" class="dev-news-detail-hero-img" />
+    ` : '';
+
+    container.innerHTML = `
+        <div class="dev-news-container dev-news-detail-view">
+            <!-- Detail Top Bar -->
+            <div class="dev-news-topbar" style="margin-bottom: 24px;">
+                <div class="dev-news-topbar-left">
+                    <button class="dev-news-back-btn" onclick="window.renderDeveloperNews()" title="Back">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div class="dev-news-title" style="font-size: 18px;">${headerTitle}</div>
+                </div>
+                <div>
+                    ${externalBtn}
+                </div>
+            </div>
+
+            <!-- Detail Headline -->
+            <h1 class="dev-news-detail-title">${item.title}</h1>
+            <div class="dev-news-meta-row" style="margin-bottom: 22px;">
+                <span class="dev-news-pill">${pillText}</span>
+                ${item.tag ? `<span class="dev-news-tag-pill">${item.tag}</span>` : ''}
+            </div>
+
+            ${heroImgHtml}
+
+            <div class="dev-news-markdown-content">
+                ${parseDeveloperNewsMarkdown(item.message)}
+            </div>
+
+            ${actionBottomBtn}
+        </div>
+    `;
+
+    const scrollContainer = document.querySelector('.scroll-container');
+    if (scrollContainer) scrollContainer.scrollTop = 0;
+};
+
+window.toggleDevNewsSearch = function() {
+    window.DeveloperNewsManager.isSearchActive = !window.DeveloperNewsManager.isSearchActive;
+    if (!window.DeveloperNewsManager.isSearchActive) {
+        window.DeveloperNewsManager.searchQuery = '';
+    }
+    window.renderDeveloperNews();
+};
+
+window.onDevNewsSearchChange = function(val) {
+    window.DeveloperNewsManager.searchQuery = val;
+    window.renderDeveloperNews();
+};
+
+window.refreshDevNews = function() {
+    window.DeveloperNewsManager.refresh();
+};
+
+// Auto-run init if DOM is already ready
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    window.DeveloperNewsManager.init();
+}

@@ -76,6 +76,43 @@ def shuffle_queue():
         return jsonify({'success': False, 'shuffled': []}), 500
 
 
+# ==================== DEVELOPER NEWS (FIREBASE RTDB) ====================
+
+@app.route('/api/developer_news', methods=['GET'])
+def api_developer_news():
+    try:
+        url = "https://airbeats-54c06-default-rtdb.firebaseio.com/developer_news.json"
+        headers = {"User-Agent": "AirBeats-Desktop/1.0", "Cache-Control": "no-cache"}
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.ok:
+            data = res.json() or {}
+            items = []
+            for k, obj in data.items():
+                if not isinstance(obj, dict):
+                    continue
+                is_active = obj.get("active", obj.get("isActive", True))
+                if is_active:
+                    items.append({
+                        "id": obj.get("id", k),
+                        "title": obj.get("title", ""),
+                        "message": obj.get("message", ""),
+                        "author": obj.get("author") or obj.get("authorName") or "Developer",
+                        "imageUrl": obj.get("imageUrl") or "",
+                        "actionUrl": obj.get("actionUrl") or "",
+                        "actionText": obj.get("actionText") or "",
+                        "tag": obj.get("tag") or "Announcement",
+                        "timestamp": int(obj.get("timestamp", int(time.time() * 1000))),
+                        "showPopup": bool(obj.get("showPopup", False)),
+                        "priority": int(obj.get("priority", 0)),
+                        "active": True
+                    })
+            items.sort(key=lambda x: (x["priority"], x["timestamp"]), reverse=True)
+            return jsonify(items)
+    except Exception as e:
+        print("[DEV NEWS] Fetch error:", e)
+    return jsonify([]), 500
+
+
 # ==================== ANDROID .BACKUP RESTORE SYSTEM ====================
 
 @app.route('/api/restore_backup', methods=['POST'])

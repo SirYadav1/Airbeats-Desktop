@@ -3237,11 +3237,15 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    transition: transform 0.2s ease, border-color 0.2s ease;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 .stats-stat-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-5px) scale(1.02);
+    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 20px rgba(29, 185, 84, 0.18);
 }
 .stats-stat-card-header {
     display: flex;
@@ -3295,11 +3299,24 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 10px 0;
+    padding: 10px 14px;
+    border-radius: 14px;
+    border: 1px solid transparent;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+}
+.stats-chart-row:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+    transform: translateX(6px) scale(1.01);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), 0 0 20px rgba(29, 185, 84, 0.22);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 .stats-chart-row:last-child {
-    border-bottom: none;
+    border-bottom: 1px solid transparent;
 }
 .stats-chart-rank {
     width: 24px;
@@ -3307,13 +3324,43 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     font-weight: 800;
     color: var(--text-secondary);
     text-align: center;
+    transition: transform 0.2s ease;
+}
+.stats-chart-row:hover .stats-chart-rank {
+    transform: scale(1.1);
+}
+.stats-chart-thumb-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #141416;
 }
 .stats-chart-thumb {
-    width: 42px;
-    height: 42px;
-    border-radius: 8px;
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
     object-fit: cover;
     flex-shrink: 0;
+    display: block;
+    transform: scale(1.0);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease;
+}
+/* Eliminate YouTube baked-in letterbox black bars */
+.stats-chart-thumb[src*="ytimg.com"] {
+    transform: scale(1.36);
+}
+.stats-chart-row:hover .stats-chart-thumb {
+    transform: scale(1.14);
+    filter: brightness(1.06);
+}
+.stats-chart-row:hover .stats-chart-thumb[src*="ytimg.com"] {
+    transform: scale(1.48);
+    filter: brightness(1.06);
 }
 .stats-chart-info {
     width: 200px;
@@ -3327,6 +3374,10 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.2s ease;
+}
+.stats-chart-row:hover .stats-chart-song-title {
+    color: #fff;
 }
 .stats-chart-song-artist {
     font-size: 12px;
@@ -3360,10 +3411,16 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     flex-shrink: 0;
     min-width: 60px;
     text-align: center;
+    transition: all 0.25s ease;
+}
+.stats-chart-row:hover .stats-chart-count-pill {
+    background: rgba(29, 185, 84, 0.16);
+    color: var(--accent);
+    border: 1px solid rgba(29, 185, 84, 0.3);
 }
 .stats-chart-play-btn {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     background: var(--accent);
     color: #000;
@@ -3371,13 +3428,17 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 13px;
     cursor: pointer;
     flex-shrink: 0;
-    transition: transform 0.2s, background 0.2s;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s, box-shadow 0.2s;
+}
+.stats-chart-row:hover .stats-chart-play-btn {
+    transform: scale(1.08);
+    box-shadow: 0 0 14px rgba(29, 185, 84, 0.55);
 }
 .stats-chart-play-btn:hover {
-    transform: scale(1.1);
+    transform: scale(1.18) !important;
     background: #1ed760;
 }
 
@@ -3404,69 +3465,103 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
 }
 .stats-item-card {
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
     padding: 14px;
     cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease, background 0.35s ease;
     position: relative;
     overflow: hidden;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 .stats-item-card:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.14);
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.24);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 42px rgba(0, 0, 0, 0.6), 0 0 28px rgba(29, 185, 84, 0.25);
 }
 .stats-item-thumb-wrap {
     width: 100%;
     aspect-ratio: 1;
-    border-radius: 12px;
+    border-radius: 14px;
     overflow: hidden;
     position: relative;
     margin-bottom: 12px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: #141416;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease;
+}
+.stats-item-card:hover .stats-item-thumb-wrap {
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 22px rgba(29, 185, 84, 0.3);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 .stats-item-thumb-wrap.round {
     border-radius: 50%;
+    border: 2.5px solid rgba(255, 255, 255, 0.1);
+}
+.stats-item-card:hover .stats-item-thumb-wrap.round {
+    border-color: var(--accent);
+    transform: scale(1.05);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 26px rgba(29, 185, 84, 0.45);
 }
 .stats-item-thumb {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.3s ease;
+    display: block;
+    transform: scale(1.0);
+    transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), filter 0.45s ease;
+}
+/* Eliminate YouTube baked-in letterbox black bars on cards */
+.stats-item-thumb[src*="ytimg.com"] {
+    transform: scale(1.36);
 }
 .stats-item-card:hover .stats-item-thumb {
-    transform: scale(1.05);
+    transform: scale(1.12);
+    filter: brightness(1.06);
+}
+.stats-item-card:hover .stats-item-thumb[src*="ytimg.com"] {
+    transform: scale(1.48);
+    filter: brightness(1.06);
 }
 .stats-item-play-overlay {
     position: absolute;
     inset: 0;
     background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .stats-item-card:hover .stats-item-play-overlay {
     opacity: 1;
 }
 .stats-item-play-btn {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background: var(--accent);
     color: #000;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    transition: transform 0.2s ease;
+    font-size: 18px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), 0 0 15px rgba(29, 185, 84, 0.4);
+    transform: scale(0.85);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s, box-shadow 0.2s;
+}
+.stats-item-card:hover .stats-item-play-btn {
+    transform: scale(1);
 }
 .stats-item-card:hover .stats-item-play-btn:hover {
-    transform: scale(1.1);
+    transform: scale(1.12);
+    background: #1ed760;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), 0 0 20px rgba(29, 185, 84, 0.6);
 }
 .stats-item-title {
     font-size: 14px;
@@ -3564,6 +3659,26 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     display: flex;
     align-items: center;
     gap: 12px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+}
+.insight-mini-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.22);
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45), 0 0 18px rgba(29, 185, 84, 0.25);
+}
+.insight-mini-thumb-wrap {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #141416;
 }
 .insight-mini-thumb {
     width: 52px;
@@ -3571,9 +3686,27 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
     border-radius: 10px;
     object-fit: cover;
     flex-shrink: 0;
+    display: block;
+    transform: scale(1.0);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease;
+}
+.insight-mini-thumb[src*="ytimg.com"] {
+    transform: scale(1.36);
+}
+.insight-mini-card:hover .insight-mini-thumb {
+    transform: scale(1.12);
+    filter: brightness(1.06);
+}
+.insight-mini-card:hover .insight-mini-thumb[src*="ytimg.com"] {
+    transform: scale(1.48);
+    filter: brightness(1.06);
 }
 .insight-mini-thumb.round {
     border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+}
+.insight-mini-card:hover .insight-mini-thumb.round {
+    border-color: var(--accent);
 }
 .insight-feature-icons {
     display: grid;

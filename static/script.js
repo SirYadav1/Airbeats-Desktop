@@ -255,16 +255,26 @@ const getHighestQualityImage = (images) => {
     let url = DEFAULT_PLACEHOLDER;
     if (!images) return url;
     if (typeof images === 'string') url = images;
-    else if (Array.isArray(images) && images.length > 0) url = images[images.length - 1].url || images[images.length - 1].link || url;
+    else if (Array.isArray(images) && images.length > 0) {
+        const last = images[images.length - 1];
+        url = (last && (last.url || last.link)) || (typeof last === 'string' ? last : url);
+    }
     else if (images.url) url = images.url;
     else if (images.link) url = images.link;
     
-    if (url.includes('placeholder.com')) {
+    if (typeof url !== 'string') return DEFAULT_PLACEHOLDER;
+    if (url.includes('placeholder.com') || url.includes('ui-avatars.com') || url.includes('via.placeholder')) {
         url = DEFAULT_PLACEHOLDER;
     }
     
     if (url.includes('googleusercontent.com') && url.includes('=w')) {
         url = url.replace(/=w\d+-h\d+.*/, '=w1080-h1080-l90-rj');
+    }
+    if (url.includes('saavncdn.com')) {
+        url = url.replace(/50x50|150x150/, '500x500');
+    }
+    if (url.includes('i.ytimg.com')) {
+        url = url.replace(/\/default\.jpg|\/mqdefault\.jpg/, '/hqdefault.jpg');
     }
     return url;
 };
@@ -4619,15 +4629,97 @@ window.StatsEngine = {
         `;
     },
 
-    getSongThumbnail: function(songId, image) {
-        if (image && typeof image === 'string' && !image.includes('ui-avatars.com') && !image.includes('placeholder')) {
-            return image;
+    getSongPlaceholderSvg: function(title, artist) {
+        const str = (title || '') + (artist || '');
+        const colors = [
+            ['#1db954', '#121212'],
+            ['#8b5cf6', '#3b82f6'],
+            ['#ec4899', '#f43f5e'],
+            ['#06b6d4', '#3b82f6'],
+            ['#f59e0b', '#ef4444'],
+            ['#10b981', '#059669'],
+            ['#6366f1', '#a855f7']
+        ];
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        const [c1, c2] = colors[Math.abs(hash) % colors.length];
+        const gradId = `song_svg_${Math.abs(hash)}`;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs><rect width="120" height="120" rx="16" fill="url(#${gradId})"/><circle cx="60" cy="60" r="42" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2"/><circle cx="60" cy="60" r="28" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2"/><circle cx="60" cy="60" r="14" fill="rgba(0,0,0,0.35)"/><path d="M54 44 v22 a7 7 0 1 1 -5 -2 a7 7 0 0 1 5 2 v-16 h18 v12 a7 7 0 1 1 -5 -2 a7 7 0 0 1 5 2 v-16 z" fill="#ffffff" opacity="0.95"/></svg>`;
+        return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    },
+
+    getSongThumbnail: function(songId, image, title = '', artist = '') {
+        const highRes = getHighestQualityImage(image);
+        if (highRes && highRes !== DEFAULT_PLACEHOLDER && !highRes.includes('placeholder') && !highRes.includes('ui-avatars')) {
+            return highRes;
         }
         const cleanId = songId ? String(songId).replace(/^seed_/, '').split('_')[0] : '';
-        if (cleanId) {
+        if (cleanId && /^[a-zA-Z0-9_-]{11}$/.test(cleanId)) {
             return `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`;
         }
-        return image || '';
+        return this.getSongPlaceholderSvg(title, artist);
+    },
+
+    pendingSongFetches: new Set(),
+
+    fetchSongImageAsync: async function(title, artist, songId) {
+        if (!title) return;
+        const key = songId || `${title}_${artist}`;
+        if (this.pendingSongFetches.has(key)) return;
+        this.pendingSongFetches.add(key);
+
+        try {
+            let foundImg = '';
+            // 1. Check window.allTracks
+            if (window.allTracks && Array.isArray(window.allTracks)) {
+                const match = window.allTracks.find(t => t && (t.id === songId || (t.title && t.title.toLowerCase() === title.toLowerCase())));
+                if (match && match.image) foundImg = getHighestQualityImage(match.image);
+            }
+            // 2. Check playHistory
+            if (!foundImg || foundImg.includes('placeholder') || foundImg.includes('ui-avatars')) {
+                try {
+                    const hist = JSON.parse(localStorage.getItem('playHistory') || '[]');
+                    const match = hist.find(t => t && (t.id === songId || (t.title && t.title.toLowerCase() === title.toLowerCase())));
+                    if (match && match.image) foundImg = getHighestQualityImage(match.image);
+                } catch(e) {}
+            }
+            // 3. Search backend songs endpoint
+            if (!foundImg || foundImg.includes('placeholder') || foundImg.includes('ui-avatars')) {
+                const query = artist && artist !== 'Unknown Artist' ? `${title} ${artist}` : title;
+                const r = await fetch(`/api/search/songs?query=${encodeURIComponent(query)}&limit=5`);
+                const d = await r.json();
+                const list = (d && d.data && (d.data.results || d.data)) || [];
+                if (Array.isArray(list) && list.length > 0) {
+                    const first = list[0];
+                    if (first && first.image) {
+                        foundImg = getHighestQualityImage(first.image);
+                    }
+                }
+            }
+            if (foundImg && !foundImg.includes('placeholder') && !foundImg.includes('ui-avatars')) {
+                try {
+                    let events = JSON.parse(localStorage.getItem('airbeats_stats_events') || '[]');
+                    let updated = false;
+                    events.forEach(e => {
+                        if (e && (e.songId === songId || (e.title && e.title.toLowerCase() === title.toLowerCase()))) {
+                            e.image = foundImg;
+                            updated = true;
+                        }
+                    });
+                    if (updated) localStorage.setItem('airbeats_stats_events', JSON.stringify(events));
+                } catch(e) {}
+
+                const escapedId = (songId || '').replace(/"/g, '\\"');
+                const escapedTitle = (title || '').replace(/"/g, '\\"');
+                document.querySelectorAll(`img[data-song-id="${escapedId}"], img[data-song-title="${escapedTitle}"]`).forEach(img => {
+                    img.src = foundImg;
+                });
+            }
+        } catch(err) {
+            console.warn('[StatsEngine] Song image fetch notice:', title, err);
+        } finally {
+            this.pendingSongFetches.delete(key);
+        }
     },
 
     getArtistImage: function(artistName, artistId, evArtistImage) {
@@ -4739,11 +4831,12 @@ window.StatsEngine = {
             events.forEach(ev => {
                 if (!ev) return;
                 const songId = ev.songId || (ev.id && ev.id.startsWith('seed_') ? ev.id.split('_')[1] : ev.id);
-                if (!ev.image || ev.image.includes('ui-avatars.com') || ev.image.includes('placeholder')) {
-                    ev.image = this.getSongThumbnail(songId, ev.image);
+                const isBrokenYt = ev.image && ev.image.includes('ytimg.com') && (!songId || !/^[a-zA-Z0-9_-]{11}$/.test(songId));
+                if (!ev.image || ev.image.includes('ui-avatars.com') || ev.image.includes('placeholder') || isBrokenYt) {
+                    ev.image = this.getSongThumbnail(songId, ev.image, ev.title, ev.artist);
                     updatedCount++;
                 }
-                if (!ev.artistImage || ev.artistImage.includes('ui-avatars.com')) {
+                if (!ev.artistImage || ev.artistImage.includes('ui-avatars.com') || ev.artistImage.includes('placeholder')) {
                     const cachedArt = this.getArtistImage(ev.artist, ev.artistId, '');
                     if (cachedArt) {
                         ev.artistImage = cachedArt;
@@ -4770,10 +4863,10 @@ window.StatsEngine = {
                     if (!t || !t.id) return;
                     const dur = t.duration ? parseInt(t.duration, 10) : 210;
                     const playCount = Math.max(1, Math.floor(Math.random() * 5) + 1);
-                    const rawSongImg = (t.image && (t.image[2] ? t.image[2].url : (t.image[1] ? t.image[1].url : t.image))) || t.image;
-                    const songImg = this.getSongThumbnail(t.id, rawSongImg);
+                    const rawSongImg = getHighestQualityImage(t.image);
                     const artName = (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].name) || t.artist || 'Unknown Artist';
                     const artId = (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].id) || t.artistIds || '';
+                    const songImg = this.getSongThumbnail(t.id, rawSongImg, t.title || t.name, artName);
                     const artImg = (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].image) || this.getArtistImage(artName, artId, '');
 
                     for (let c = 0; c < playCount; c++) {
@@ -4810,10 +4903,10 @@ window.StatsEngine = {
         const dur = track.duration ? parseInt(track.duration, 10) : 210;
         const validMs = Math.max(15000, parseInt(listenedMs, 10) || (dur * 1000));
         
-        const rawSongImg = (track.image && (track.image[2] ? track.image[2].url : (track.image[1] ? track.image[1].url : track.image))) || track.image;
-        const songImg = this.getSongThumbnail(track.id, rawSongImg);
+        const rawSongImg = getHighestQualityImage(track.image);
         const artName = (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].name) || track.artist || 'Unknown Artist';
         const artId = (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].id) || track.artistIds || '';
+        const songImg = this.getSongThumbnail(track.id, rawSongImg, track.title || track.name, artName);
         const artImg = (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].image) || this.getArtistImage(artName, artId, track.artistImage || '');
 
         const newEvent = {
@@ -5004,7 +5097,7 @@ window.StatsEngine = {
             const songId = ev.songId || ev.id;
             if (songId) {
                 if (!songMap.has(songId)) {
-                    const songImg = this.getSongThumbnail(songId, ev.image);
+                    const songImg = this.getSongThumbnail(songId, ev.image, ev.title, ev.artist);
                     songMap.set(songId, {
                         id: songId,
                         title: ev.title || 'Unknown Track',
@@ -5053,7 +5146,7 @@ window.StatsEngine = {
             const albumName = ev.album || '';
             if (albumName) {
                 if (!albumMap.has(albumName)) {
-                    const albImg = (ev.image && !ev.image.includes('ui-avatars') && !ev.image.includes('placeholder')) ? ev.image : this.getSongThumbnail(songId, ev.image);
+                    const albImg = (ev.image && !ev.image.includes('ui-avatars') && !ev.image.includes('placeholder')) ? getHighestQualityImage(ev.image) : this.getSongThumbnail(songId, ev.image, albumName, ev.artist);
                     albumMap.set(albumName, {
                         id: ev.albumId || albumName,
                         title: albumName,
@@ -5304,10 +5397,21 @@ async function renderStats() {
                 <div class="stats-chart-list">
                     ${top5.map((s, idx) => {
                         const fillPercent = Math.max(10, Math.round((s.playCount / maxPlays) * 100));
+                        const safeTitle = (s.title || '').replace(/'/g, "\\'");
+                        const safeArtist = (s.artist || '').replace(/'/g, "\\'");
                         return `
-                        <div class="stats-chart-row">
+                        <div class="stats-chart-row" onclick="window.playSingleTrack('${s.id}')">
                             <span class="stats-chart-rank" style="${idx === 0 ? 'color: #ffd700;' : (idx === 1 ? 'color: #c0c0c0;' : (idx === 2 ? 'color: #cd7f32;' : ''))}">#${idx + 1}</span>
-                            <img src="${s.image}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src='https://i.ytimg.com/vi/${s.id}/hqdefault.jpg';}" class="stats-chart-thumb" alt="${s.title}">
+                            <div class="stats-chart-thumb-wrap">
+                                <img src="${getHighestQualityImage(s.image)}" 
+                                     data-song-id="${s.id}" 
+                                     data-song-title="${(s.title || '').replace(/"/g, '&quot;')}" 
+                                     data-song-artist="${(s.artist || '').replace(/"/g, '&quot;')}" 
+                                     onload="if(this.naturalWidth<=120&&this.naturalHeight<=90){this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');}" 
+                                     onerror="this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');" 
+                                     class="stats-chart-thumb" 
+                                     alt="${s.title}">
+                            </div>
                             <div class="stats-chart-info">
                                 <div class="stats-chart-song-title" title="${s.title}">${s.title}</div>
                                 <div class="stats-chart-song-artist" title="${s.artist}">${s.artist}</div>
@@ -5316,7 +5420,7 @@ async function renderStats() {
                                 <div class="stats-bar-fill" style="width: ${fillPercent}%;"></div>
                             </div>
                             <span class="stats-chart-count-pill">${s.playCount} plays</span>
-                            <button class="stats-chart-play-btn" onclick="window.playSingleTrack('${s.id}')" title="Play Now"><i class="fas fa-play"></i></button>
+                            <button class="stats-chart-play-btn" onclick="event.stopPropagation(); window.playSingleTrack('${s.id}')" title="Play Now"><i class="fas fa-play"></i></button>
                         </div>
                         `;
                     }).join('')}
@@ -5336,10 +5440,20 @@ async function renderStats() {
                 </div>
                 ${agg.topSongs.length > 0 ? `
                     <div class="stats-shelf-grid">
-                        ${agg.topSongs.slice(0, 12).map((s, idx) => `
+                        ${agg.topSongs.slice(0, 12).map((s, idx) => {
+                            const safeTitle = (s.title || '').replace(/'/g, "\\'");
+                            const safeArtist = (s.artist || '').replace(/'/g, "\\'");
+                            return `
                             <div class="stats-item-card" onclick="window.playSingleTrack('${s.id}')">
                                 <div class="stats-item-thumb-wrap">
-                                    <img src="${s.image}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src='https://i.ytimg.com/vi/${s.id}/hqdefault.jpg';}" class="stats-item-thumb" alt="${s.title}">
+                                    <img src="${getHighestQualityImage(s.image)}" 
+                                         data-song-id="${s.id}" 
+                                         data-song-title="${(s.title || '').replace(/"/g, '&quot;')}" 
+                                         data-song-artist="${(s.artist || '').replace(/"/g, '&quot;')}" 
+                                         onload="if(this.naturalWidth<=120&&this.naturalHeight<=90){this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');}" 
+                                         onerror="this.src=window.StatsEngine.getSongPlaceholderSvg('${safeTitle}','${safeArtist}');window.StatsEngine.fetchSongImageAsync('${safeTitle}','${safeArtist}','${s.id}');" 
+                                         class="stats-item-thumb" 
+                                         alt="${s.title}">
                                     <div class="stats-item-play-overlay">
                                         <div class="stats-item-play-btn"><i class="fas fa-play"></i></div>
                                     </div>
@@ -5348,7 +5462,8 @@ async function renderStats() {
                                 <div class="stats-item-sub" title="${s.artist}">${s.artist}</div>
                                 <span class="stats-item-count-badge">${s.playCount} plays • ${window.StatsEngine.formatTime(s.totalListenMs)}</span>
                             </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 ` : `
                     <div style="color: var(--text-secondary); padding: 30px 0; text-align: center;">No song records in this period. Start streaming tracks to see your stats!</div>
@@ -5362,17 +5477,25 @@ async function renderStats() {
                 </div>
                 ${agg.topArtists.length > 0 ? `
                     <div class="stats-shelf-grid">
-                        ${agg.topArtists.slice(0, 12).map((a, idx) => `
+                        ${agg.topArtists.slice(0, 12).map((a, idx) => {
+                            const safeName = (a.name || '').replace(/'/g, "\\'");
+                            return `
                             <div class="stats-item-card" onclick="location.hash='#artist/${a.id}'">
                                 <div class="stats-item-thumb-wrap round">
-                                    <img src="${a.image}" data-artist-name="${a.name}" data-artist-id="${a.id}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${a.name.replace(/'/g, "\\'")}');}" class="stats-item-thumb" alt="${a.name}">
+                                    <img src="${getHighestQualityImage(a.image)}" 
+                                         data-artist-name="${(a.name || '').replace(/"/g, '&quot;')}" 
+                                         data-artist-id="${a.id}" 
+                                         onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${safeName}');window.StatsEngine.fetchArtistImageAsync('${safeName}','${a.id}');}" 
+                                         class="stats-item-thumb" 
+                                         alt="${a.name}">
                                 </div>
                                 <div class="stats-item-title" style="text-align: center;">${idx + 1}. ${a.name}</div>
                                 <div style="text-align: center;">
                                     <span class="stats-item-count-badge">${a.playCount} plays • ${window.StatsEngine.formatTime(a.totalListenMs)}</span>
                                 </div>
                             </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 ` : `
                     <div style="color: var(--text-secondary); padding: 20px 0; text-align: center;">No artist data in this period.</div>
@@ -5386,16 +5509,23 @@ async function renderStats() {
                 </div>
                 ${agg.topAlbums.length > 0 ? `
                     <div class="stats-shelf-grid">
-                        ${agg.topAlbums.slice(0, 12).map((alb, idx) => `
+                        ${agg.topAlbums.slice(0, 12).map((alb, idx) => {
+                            const safeAlbTitle = (alb.title || '').replace(/'/g, "\\'");
+                            const safeAlbArtist = (alb.artist || '').replace(/'/g, "\\'");
+                            return `
                             <div class="stats-item-card" onclick="location.hash='#album/${alb.id}'">
                                 <div class="stats-item-thumb-wrap">
-                                    <img src="${alb.image}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src='https://via.placeholder.com/150';}" class="stats-item-thumb" alt="${alb.title}">
+                                    <img src="${getHighestQualityImage(alb.image)}" 
+                                         onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getSongPlaceholderSvg('${safeAlbTitle}','${safeAlbArtist}');}" 
+                                         class="stats-item-thumb" 
+                                         alt="${alb.title}">
                                 </div>
                                 <div class="stats-item-title" title="${alb.title}">${idx + 1}. ${alb.title}</div>
                                 <div class="stats-item-sub" title="${alb.artist}">${alb.artist}</div>
                                 <span class="stats-item-count-badge">${alb.playCount} plays • ${window.StatsEngine.formatTime(alb.totalListenMs)}</span>
                             </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 ` : `
                     <div style="color: var(--text-secondary); padding: 20px 0; text-align: center;">No album plays recorded in this period.</div>
@@ -5408,10 +5538,19 @@ async function renderStats() {
 
     globalLoading.style.display = 'none';
 
+    // Auto-fetch authentic covers for any songs currently using placeholder or broken YouTube
+    if (agg.topSongs && agg.topSongs.length > 0) {
+        agg.topSongs.slice(0, 12).forEach(s => {
+            if (!s.image || s.image.startsWith('data:image/svg') || s.image.includes('placeholder') || (s.image.includes('ytimg.com') && !/^[a-zA-Z0-9_-]{11}$/.test(s.id))) {
+                window.StatsEngine.fetchSongImageAsync(s.title, s.artist, s.id);
+            }
+        });
+    }
+
     // Auto-fetch authentic artist photos for any visible artists currently using placeholder
     if (agg.topArtists && agg.topArtists.length > 0) {
         agg.topArtists.slice(0, 12).forEach(a => {
-            if (!a.image || a.image.startsWith('data:image/svg')) {
+            if (!a.image || a.image.startsWith('data:image/svg') || a.image.includes('placeholder')) {
                 window.StatsEngine.fetchArtistImageAsync(a.name, a.id);
             }
         });
@@ -5487,8 +5626,14 @@ window.openInsightModal = function() {
 
             <!-- KEY HIGHLIGHTS -->
             <div class="insight-highlights-grid">
-                <div class="insight-mini-card">
-                    <img src="${topSong ? topSong.image : window.StatsEngine.getSongThumbnail('', '')}" onerror="if(!this.dataset.errored){this.dataset.errored='1';if('${topSong ? topSong.id : ''}')this.src='https://i.ytimg.com/vi/${topSong ? topSong.id : ''}/hqdefault.jpg';}" class="insight-mini-thumb" alt="Top Track">
+                <div class="insight-mini-card" ${topSong ? `onclick="window.playSingleTrack('${topSong.id}')" style="cursor: pointer;"` : ''}>
+                    <div class="insight-mini-thumb-wrap">
+                        <img src="${topSong ? getHighestQualityImage(topSong.image) : window.StatsEngine.getSongPlaceholderSvg('', '')}" 
+                             onload="if(this.naturalWidth<=120&&this.naturalHeight<=90){this.src=window.StatsEngine.getSongPlaceholderSvg('${topSong ? (topSong.title || '').replace(/'/g, "\\'") : ''}','${topSong ? (topSong.artist || '').replace(/'/g, "\\'") : ''}');}" 
+                             onerror="this.src=window.StatsEngine.getSongPlaceholderSvg('${topSong ? (topSong.title || '').replace(/'/g, "\\'") : ''}','${topSong ? (topSong.artist || '').replace(/'/g, "\\'") : ''}');" 
+                             class="insight-mini-thumb" 
+                             alt="Top Track">
+                    </div>
                     <div style="overflow: hidden;">
                         <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;">Top Track</div>
                         <div style="font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -5500,8 +5645,15 @@ window.openInsightModal = function() {
                     </div>
                 </div>
 
-                <div class="insight-mini-card">
-                    <img src="${topArtist ? topArtist.image : window.StatsEngine.getArtistPlaceholderSvg('Artist')}" data-artist-name="${topArtist ? topArtist.name : ''}" data-artist-id="${topArtist ? topArtist.id : ''}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${topArtist ? topArtist.name.replace(/'/g, "\\'") : 'Artist'}');}" class="insight-mini-thumb round" alt="Top Artist">
+                <div class="insight-mini-card" ${topArtist ? `onclick="location.hash='#artist/${topArtist.id}'" style="cursor: pointer;"` : ''}>
+                    <div class="insight-mini-thumb-wrap round">
+                        <img src="${topArtist ? getHighestQualityImage(topArtist.image) : window.StatsEngine.getArtistPlaceholderSvg('Artist')}" 
+                             data-artist-name="${topArtist ? (topArtist.name || '').replace(/"/g, '&quot;') : ''}" 
+                             data-artist-id="${topArtist ? topArtist.id : ''}" 
+                             onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${topArtist ? (topArtist.name || '').replace(/'/g, "\\'") : 'Artist'}');}" 
+                             class="insight-mini-thumb round" 
+                             alt="Top Artist">
+                    </div>
                     <div style="overflow: hidden;">
                         <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;">Top Artist</div>
                         <div style="font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">

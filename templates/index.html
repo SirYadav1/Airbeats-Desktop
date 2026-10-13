@@ -44,6 +44,7 @@
     <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/drkvenom786/Airbeats/137e3935198c25bfbd5eef1a050002ed52fa84ff/icon.png">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ range(1, 999999) | random }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='fontawesome/all.min.css') }}?v=6.4.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
         if (localStorage.getItem('theme') === 'dark') {
@@ -321,10 +322,10 @@
             
             <div class="feature-grid">
                 <div class="feature-item">
-                    <div class="feature-icon"><i class="fas fa-cloud"></i></div>
+                    <div class="feature-icon"><i class="fas fa-music"></i></div>
                     <div>
-                        <div style="color: white; font-size: 18px; font-weight: 600; margin-bottom: 4px;">True Cloud Sync</div>
-                        <div style="color: rgba(255,255,255,0.5); font-size: 14px;">Your playlists, history, and favorites automatically sync between Windows, Linux, and Android.</div>
+                        <div style="color: white; font-size: 18px; font-weight: 600; margin-bottom: 4px;">Infinite Music Library</div>
+                        <div style="color: rgba(255,255,255,0.5); font-size: 14px;">Stream millions of songs, albums, and artists completely free with zero ads.</div>
                     </div>
                 </div>
                 <div class="feature-item">
@@ -351,12 +352,8 @@
         document.addEventListener("DOMContentLoaded", () => {
             const hasOnboarded = localStorage.getItem('onboarded');
             const obOverlay = document.getElementById('onboarding-overlay');
-            const authOverlay = document.getElementById('auth-overlay');
-            
-            if (!hasOnboarded) {
-                // Show onboarding, hide auth
+            if (!hasOnboarded && obOverlay) {
                 obOverlay.style.display = 'flex';
-                if (authOverlay) authOverlay.style.display = 'none';
             }
         });
 
@@ -373,163 +370,21 @@
                     next.classList.remove('exit');
                     next.classList.add('active');
                 }
-            }, 300); // Wait for exit animation
+            }, 300);
         };
 
         window.finishOnboarding = function() {
             const obOverlay = document.getElementById('onboarding-overlay');
-            const authOverlay = document.getElementById('auth-overlay');
-            
-            obOverlay.style.opacity = '0';
-            localStorage.setItem('onboarded', 'true');
-            
-            setTimeout(() => {
-                obOverlay.style.display = 'none';
-                
-                // Show login screen if they aren't logged in
-                const authState = localStorage.getItem('auth_state');
-                if (authState !== 'guest' && authState !== 'logged_in') {
-                    if (authOverlay) {
-                        authOverlay.style.opacity = '0';
-                        authOverlay.style.display = 'flex';
-                        // fade in
-                        setTimeout(() => {
-                            authOverlay.style.transition = 'opacity 0.8s ease';
-                            authOverlay.style.opacity = '1';
-                        }, 50);
-                    }
-                }
-            }, 800);
+            if (obOverlay) {
+                obOverlay.style.opacity = '0';
+                localStorage.setItem('onboarded', 'true');
+                setTimeout(() => {
+                    obOverlay.style.display = 'none';
+                }, 500);
+            }
         };
     </script>
     <!-- END ONBOARDING OVERLAY -->
-
-
-    <!-- AUTH OVERLAY -->
-    <style id="auth-styles">
-        @keyframes gradientMesh {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        
-        @keyframes float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-            100% { transform: translateY(0px); }
-        }
-
-        #auth-overlay {
-            /* Liquid animated mesh background */
-            background: linear-gradient(-45deg, #0f172a, #3b0764, #000000, #064e3b);
-            background-size: 400% 400%;
-            animation: gradientMesh 15s ease infinite;
-        }
-
-        .glass-card {
-            background: rgba(20, 20, 25, 0.35);
-            backdrop-filter: blur(24px) saturate(180%);
-            -webkit-backdrop-filter: blur(24px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 28px;
-            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            animation: float 6s ease-in-out infinite;
-        }
-
-        .glass-input {
-            background: rgba(255, 255, 255, 0.04) !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
-            border-radius: 12px !important;
-            color: white !important;
-            transition: all 0.3s ease !important;
-        }
-        .glass-input:focus {
-            background: rgba(255, 255, 255, 0.08) !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
-            outline: none !important;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.05) !important;
-        }
-
-        .glass-btn-primary {
-            background: linear-gradient(135deg, #1db954, #128a3c) !important;
-            box-shadow: 0 10px 20px rgba(29, 185, 84, 0.3) !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            transition: all 0.3s ease !important;
-        }
-        .glass-btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 25px rgba(29, 185, 84, 0.4) !important;
-            filter: brightness(1.1);
-        }
-
-        .glass-btn-secondary {
-            background: rgba(255, 255, 255, 0.05) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            transition: all 0.3s ease !important;
-        }
-        .glass-btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1) !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            transform: translateY(-2px);
-        }
-        
-        .glass-btn-google {
-            background: rgba(255, 255, 255, 0.95) !important;
-            color: #111 !important;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2) !important;
-            transition: all 0.3s ease !important;
-        }
-        .glass-btn-google:hover {
-            transform: translateY(-2px);
-            background: #ffffff !important;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3) !important;
-        }
-    </style>
-    
-    <div id="auth-overlay" style="display: none; position: fixed; inset: 0; z-index: 999999; flex-direction: column; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;">
-        
-        <div class="glass-card" style="padding: 45px 40px; width: 420px; max-width: 90%; text-align: center; position: relative; overflow: hidden;">
-            
-            <!-- Subtle glow inside the card -->
-            <div style="position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at center, rgba(29, 185, 84, 0.08) 0%, transparent 50%); pointer-events: none;"></div>
-
-            <img src="https://raw.githubusercontent.com/drkvenom786/Airbeats/137e3935198c25bfbd5eef1a050002ed52fa84ff/icon.png" alt="Airbeats" style="width: 88px; height: 88px; border-radius: 24px; margin-bottom: 24px; box-shadow: 0 15px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);">
-            
-            <h2 id="auth-title" style="color: #ffffff; margin: 0 0 10px 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Welcome to Airbeats</h2>
-            <p id="auth-subtitle" style="color: rgba(255,255,255,0.6); margin: 0 0 30px 0; font-size: 15px; font-weight: 400;">Sign in to sync your library.</p>
-            
-            <div id="auth-error" style="color: #ff5555; background: rgba(255,0,0,0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,0,0,0.2); font-size: 13px; margin-bottom: 20px; display: none;"></div>
-
-            <input type="text" class="glass-input" id="auth-name" placeholder="Your Name" style="width: 100%; box-sizing: border-box; padding: 14px; margin-bottom: 14px; display: none; font-size: 15px;">
-            <input type="email" class="glass-input" id="auth-email" placeholder="Email Address" style="width: 100%; box-sizing: border-box; padding: 14px; margin-bottom: 14px; font-size: 15px;">
-            <input type="password" class="glass-input" id="auth-password" placeholder="Password" style="width: 100%; box-sizing: border-box; padding: 14px; margin-bottom: 24px; font-size: 15px;">
-            
-            <button id="btn-email-login" class="glass-btn-primary" style="width: 100%; padding: 14px; color: white; border-radius: 12px; font-weight: 600; cursor: pointer; margin-bottom: 20px; font-size: 16px; letter-spacing: 0.5px;">
-                Sign In
-            </button>
-
-            <div style="color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 24px;">
-                <span id="auth-toggle-text">Don't have an account?</span> 
-                <a href="#" id="btn-toggle-mode" style="color: #1db954; text-decoration: none; font-weight: 600;">Sign Up</a>
-            </div>
-
-            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
-                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
-                <span style="margin: 0 15px; color: rgba(255,255,255,0.4); font-size: 12px; font-weight: 500; letter-spacing: 1px;">OR</span>
-                <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
-            </div>
-
-            <button id="btn-google-login" class="glass-btn-google" style="width: 100%; padding: 14px; border-radius: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; font-size: 15px;">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" style="width: 20px;">
-                Continue with Google
-            </button>
-            
-            <button id="btn-guest-login" class="glass-btn-secondary" style="width: 100%; padding: 14px; color: rgba(255,255,255,0.8); border-radius: 12px; font-weight: 500; cursor: pointer; font-size: 15px;">
-                Continue as Guest
-            </button>
-        </div>
-    </div>
 
 
     
@@ -549,16 +404,18 @@
             </div>
             
             <div id="sidebar-main-menu">
-                <div class="nav-section">Library</div>
+                <div class="nav-section">Menu</div>
                 <ul class="nav-links">
-                    <li><a href="#search" class="nav-item active" id="nav-search">Browse</a></li>
-                    <li><a href="#home" class="nav-item" id="nav-home">Songs</a></li>
+                    <li><a href="#home" class="nav-item active" id="nav-home">Home</a></li>
+                    <li><a href="#explore" class="nav-item" id="nav-explore">Explore</a></li>
+                    <li><a href="#search" class="nav-item" id="nav-search">Browse</a></li>
                     <li><a href="#albums" class="nav-item" id="nav-albums">Albums</a></li>
                     <li><a href="#artists" class="nav-item" id="nav-artists">Artists</a></li>
                 </ul>
 
-                <div class="nav-section">My music</div>
+                <div class="nav-section">Library</div>
                 <ul class="nav-links">
+                    <li><a href="#stats" class="nav-item" id="nav-stats">Stats & Insights</a></li>
                     <li><a href="#history" class="nav-item" id="nav-history">Recently Played</a></li>
                     <li><a href="#favorites" class="nav-item" id="nav-favorites">Favorite Songs</a></li>
                     <li><a href="#playlists" class="nav-item" id="nav-playlists">Playlists</a></li>
@@ -569,20 +426,18 @@
             
             <div id="sidebar-settings-menu" style="display: none;">
                 <div class="nav-section">
-                    <a href="#home" style="color: var(--text-secondary); text-decoration: none; font-size: 14px; margin-bottom: 20px; display: inline-block;">
+                    <a href="#home" class="settings-back-link">
                         <i class="fas fa-arrow-left"></i> Back
                     </a>
                 </div>
-                <div class="nav-section">Account</div>
-                <ul class="nav-links">
-                    <li><a href="#settings/profile" class="nav-item" id="nav-settings-profile">Profile & Badges</a></li>
-                    <li><a href="#" class="nav-item" style="color: #ff4444;" id="nav-logout" onclick="window.logoutUser()">Sign Out</a></li>
-                </ul>
                 <div class="nav-section">Settings</div>
                 <ul class="nav-links">
-                    <li><a href="#settings/appearance" class="nav-item" id="nav-settings-appearance">Appearance</a></li>
-                    <li><a href="#settings/about" class="nav-item" id="nav-settings-about">About</a></li>
-                    <li><a href="#settings/updates" class="nav-item" id="nav-settings-updates">Updates</a></li>
+                    <li><a href="#settings/backup" class="nav-item" id="nav-settings-backup"><i class="fas fa-database"></i> <span>Backup & Restore</span></a></li>
+                    <li><a href="#settings/appearance" class="nav-item" id="nav-settings-appearance"><i class="fas fa-palette"></i> <span>Appearance</span></a></li>
+                    <li><a href="#settings/aod" class="nav-item" id="nav-settings-aod"><i class="fas fa-moon"></i> <span>Always On Display</span></a></li>
+                    <li><a href="#settings/developer-news" class="nav-item" id="nav-settings-developer-news"><i class="fas fa-newspaper"></i> <span>News from Developers</span></a></li>
+                    <li><a href="#settings/about" class="nav-item" id="nav-settings-about"><i class="fas fa-info-circle"></i> <span>About</span></a></li>
+                    <li><a href="#settings/updates" class="nav-item" id="nav-settings-updates"><i class="fas fa-sync-alt"></i> <span>Updates</span></a></li>
                 </ul>
             </div>
         </nav>
@@ -600,18 +455,20 @@
                 </div>
 
                 <div class="top-links">
+                    <a href="#explore">Explore</a>
                     <a href="#new-releases">New Releases</a>
-                    <a href="#">New Feed</a>
                     <a href="javascript:void(0)" onclick="window.playMadeForYouShuffle()">Shuffle Play</a>
                 </div>
                 
                 <div class="user-profile">
-                    <a href="#stats" style="color: inherit; text-decoration: none; margin-right: 10px;" title="Leaderboard & Stats">
-                        <i class="fas fa-trophy stats-nav-icon"></i>
+                    <a href="javascript:void(0)" onclick="window.toggleRightPanel()" id="topNowPlayingToggle" style="color: inherit; text-decoration: none; margin-right: 15px; display: none;" title="Toggle Now Playing Panel"><i class="fas fa-indent"></i></a>
+                    <a href="#settings/developer-news" id="topDevNewsIcon" style="color: inherit; text-decoration: none; margin-right: 15px; position: relative;" title="News from Developers">
+                        <i class="fas fa-newspaper"></i>
+                        <span id="devNewsBadgeDot" style="display: none; position: absolute; top: -3px; right: -4px; width: 8px; height: 8px; background: var(--accent, #1db954); border-radius: 50%; border: 1.5px solid #000;"></span>
                     </a>
-                    <a href="#settings/appearance" style="color: inherit; text-decoration: none;"><i class="fas fa-cog"></i></a>
-                    <i class="far fa-bell"></i>
-                    <img src="https://ui-avatars.com/api/?name=User&background=ddd&color=333" alt="User">
+                    <a href="#stats" style="color: inherit; text-decoration: none; margin-right: 15px;" title="Stats & Insights"><i class="fas fa-chart-pie"></i></a>
+                    <a href="#settings/backup" style="color: inherit; text-decoration: none; margin-right: 15px;" title="Backup & Restore"><i class="fas fa-hdd"></i></a>
+                    <a href="#settings/appearance" style="color: inherit; text-decoration: none;" title="Settings"><i class="fas fa-cog"></i></a>
                 </div>
             </header>
 
@@ -631,10 +488,13 @@
                 </div>
 
                 <!-- RIGHT PANEL -->
-                <div class="right-panel">
+                <div class="right-panel" id="rightPanelContainer">
                     <div class="now-playing-large">
-                        <div class="np-header">
-                            <h3>Now Playing</h3>
+                        <div class="np-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0;">Now Playing</h3>
+                            <button onclick="window.toggleRightPanel(false)" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 13px; padding: 4px;" title="Hide Now Playing Panel">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                         <div class="np-image-container">
                             <img id="rightPanelImage" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="skeleton" alt="Now Playing">
@@ -646,8 +506,9 @@
                                     <div id="rightPanelArtist" class="np-artist">Artist</div>
                                 </div>
                                 <div style="display: flex; gap: 16px; align-items: center; justify-content: flex-end;">
-                                    <i class="far fa-heart" id="likeBtn" style="cursor:pointer; font-size: 18px; color: var(--text-secondary);"></i>
+                                    <i class="far fa-heart" id="likeBtn" style="cursor:pointer; font-size: 18px; color: var(--text-secondary);" title="Like"></i>
                                     <i class="fas fa-folder-plus" id="playlistBtn" style="cursor:pointer; font-size: 18px; color: var(--text-secondary);" title="Add to Playlist"></i>
+                                    <i class="fas fa-ellipsis-v" id="rightPanelMoreBtn" style="cursor:pointer; font-size: 18px; color: var(--text-secondary);" onclick="window.openPlayerMoreMenu()" title="More Options"></i>
                                 </div>
                             </div>
                         </div>
@@ -663,15 +524,15 @@
 
     <!-- ANDROID STYLE BOTTOM NAV (Mobile Only) -->
     <div class="mobile-bottom-nav" id="mobileBottomNav" style="display: none;">
-        <a href="#search" class="mobile-nav-item active" id="mob-nav-search">
+        <a href="#home" class="mobile-nav-item active" id="mob-nav-home">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="#explore" class="mobile-nav-item" id="mob-nav-explore">
             <i class="fas fa-compass"></i>
-            <span>Browse</span>
+            <span>Explore</span>
         </a>
-        <a href="#home" class="mobile-nav-item" id="mob-nav-home">
-            <i class="fas fa-music"></i>
-            <span>Songs</span>
-        </a>
-        <a href="javascript:void(0)" class="mobile-nav-item" onclick="focusMobileSearch()" id="mob-nav-search-btn">
+        <a href="#search" class="mobile-nav-item" id="mob-nav-search">
             <i class="fas fa-search"></i>
             <span>Search</span>
         </a>
@@ -689,6 +550,10 @@
                 <div class="fp-info">
                     <div id="playerTitle" class="fp-title">No song</div>
                     <div id="playerArtist" class="fp-artist">Artist</div>
+                </div>
+                <div id="lt-mini-indicator" onclick="window.openListenTogetherModal()" style="display: none; cursor: pointer; align-items: center; gap: 6px; background: rgba(29, 185, 84, 0.15); border: 1px solid rgba(29, 185, 84, 0.35); padding: 4px 10px; border-radius: 50px; font-size: 11px; font-weight: 800; color: var(--accent); margin-left: 12px; white-space: nowrap;" title="Listen Together Session Active">
+                    <span style="width: 7px; height: 7px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 6px var(--accent); animation: newsPulse 1.8s infinite;"></span>
+                    <span id="lt-mini-indicator-text">SYNCED</span>
                 </div>
             </div>
             
@@ -710,17 +575,15 @@
             <div class="fp-right">
                 <button class="icon-btn" id="shuffleBtn" onclick="window.toggleShuffle()" title="Shuffle"><i class="fas fa-random"></i></button>
                 <button class="icon-btn" id="repeatBtn" onclick="window.toggleRepeat()" title="Repeat"><i class="fas fa-redo"></i></button>
-                <button class="icon-btn" id="downloadBtn" onclick="window.downloadCurrentSong()" title="Download Song"><i class="fas fa-download"></i></button>
                 <button class="icon-btn" id="lyricsBtn" onclick="window.toggleLyrics()" title="Lyrics"><i class="fas fa-microphone-alt"></i></button>
-                <button class="icon-btn" onclick="window.openListenTogetherModal()" title="Listen Together"><i class="fas fa-users" style="color: #1DB954;"></i></button>
-                <button class="icon-btn" id="muteBtn" onclick="window.toggleMute()" title="Mute/Unmute"><i class="fas fa-volume-up"></i></button>
+                <button class="icon-btn" id="playerMoreBtn" onclick="window.openPlayerMoreMenu()" title="More Options"><i class="fas fa-ellipsis-v"></i></button>
             </div>
         </div>
     </div>
     <audio id="audioElement"></audio>
 
     <!-- PLAYLIST MODAL -->
-    <div class="modal-overlay" id="playlistModal">
+    <div class="modal-overlay" id="playlistModal" onclick="if(event.target === this) window.closePlaylistModal()">
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Add to Playlist</div>
@@ -779,6 +642,9 @@
                         <button class="lyrics-close-btn" id="lyricsRefreshBtn" onclick="window.forceRefreshLyrics()" title="Refresh Lyrics">
                             <i class="fas fa-sync-alt"></i>
                         </button>
+                        <button class="lyrics-close-btn" id="lyricsMenuBtn" onclick="window.openLyricsMenu()" title="Lyrics Options">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
                         <button class="lyrics-close-btn" onclick="window.closeLyrics()" title="Close Lyrics">
                             <i class="fas fa-chevron-down"></i>
                         </button>
@@ -788,6 +654,293 @@
                 <div id="lyricsContent" class="lyrics-container"></div>
             </div>
             
+        </div>
+    </div>
+
+    <!-- LYRICS 3-DOT BOTTOM SHEET (Android Style LyricsMenu) -->
+    <div class="player-more-sheet-overlay" id="lyricsMenuSheetOverlay" onclick="window.closeLyricsMenu(event)" style="display: none;">
+        <div class="player-more-sheet lyrics-menu-sheet" id="lyricsMenuSheet" onclick="event.stopPropagation()">
+            <div class="sheet-handle-bar" onclick="window.closeLyricsMenu()"></div>
+            
+            <div class="sheet-header">
+                <div class="sheet-track-info">
+                    <img id="lyricsSheetCover" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="skeleton" alt="Artwork">
+                    <div class="sheet-track-meta">
+                        <div id="lyricsSheetTitle" class="sheet-track-title">Song Title</div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div id="lyricsSheetArtist" class="sheet-track-artist">Artist</div>
+                            <span id="lyricsSheetBadge" class="lyrics-status-badge">Synced</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="sheet-close-btn" onclick="window.closeLyricsMenu()" title="Close menu">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Active Translation Banner -->
+            <div id="lyricsActiveTranslationBanner" class="lyrics-active-trans-banner" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-magic" style="color: var(--accent);"></i>
+                    <div>
+                        <div style="font-size: 13px; font-weight: 700; color: #fff;">AI Translation Active</div>
+                        <div id="lyricsActiveTransLang" style="font-size: 11px; color: var(--text-secondary);">Hinglish (Hindi in English)</div>
+                    </div>
+                </div>
+                <button class="lyrics-clear-trans-btn" onclick="window.clearAiTranslation()" title="Clear translation">
+                    <i class="fas fa-trash-alt"></i> Clear
+                </button>
+            </div>
+
+            <!-- 2x2 Action Cards (Translate, Search, Refetch, Edit) -->
+            <div class="lyrics-cards-grid">
+                <!-- Translate Card -->
+                <div class="lyrics-action-card primary" onclick="window.openAiTranslateModal()">
+                    <div class="lyrics-card-top">
+                        <div class="lyrics-card-icon"><i class="fas fa-language"></i></div>
+                        <span class="lyrics-card-badge" id="lyricsTranslateBadge">AI</span>
+                    </div>
+                    <div class="lyrics-card-title">Translate</div>
+                    <div class="lyrics-card-sub" id="lyricsTranslateSub">AI Translation</div>
+                </div>
+
+                <!-- Search Card -->
+                <div class="lyrics-action-card" onclick="window.openLyricsSearchModal()">
+                    <div class="lyrics-card-top">
+                        <div class="lyrics-card-icon"><i class="fas fa-search"></i></div>
+                    </div>
+                    <div class="lyrics-card-title">Search</div>
+                    <div class="lyrics-card-sub">Search online</div>
+                </div>
+
+                <!-- Refetch Card -->
+                <div class="lyrics-action-card" onclick="window.refetchLyrics()">
+                    <div class="lyrics-card-top">
+                        <div class="lyrics-card-icon"><i class="fas fa-sync-alt"></i></div>
+                    </div>
+                    <div class="lyrics-card-title">Refetch</div>
+                    <div class="lyrics-card-sub">Reload lyrics</div>
+                </div>
+
+                <!-- Edit Card -->
+                <div class="lyrics-action-card" onclick="window.openLyricsEditModal()">
+                    <div class="lyrics-card-top">
+                        <div class="lyrics-card-icon"><i class="fas fa-edit"></i></div>
+                    </div>
+                    <div class="lyrics-card-title">Edit</div>
+                    <div class="lyrics-card-sub">Edit lyrics text</div>
+                </div>
+            </div>
+
+            <!-- Providers List Section -->
+            <div class="lyrics-providers-section">
+                <div class="lyrics-providers-header">
+                    <div>
+                        <div style="font-size: 14px; font-weight: 700; color: #fff;">Lyrics Providers</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">All 11 sources from AirBeats app &bull; Click to switch</div>
+                    </div>
+                    <span id="lyricsCurrentProviderTag" class="lyrics-active-provider-tag">LRC Lib</span>
+                </div>
+
+                <div class="lyrics-providers-list" id="lyricsProvidersList">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LYRICS SEARCH MODAL -->
+    <div class="custom-modal-overlay" id="lyricsSearchModal" onclick="window.closeLyricsSearchModal(event)" style="display: none;">
+        <div class="custom-modal-box" onclick="event.stopPropagation()">
+            <div class="custom-modal-header">
+                <h3><i class="fas fa-search" style="color: var(--accent); margin-right: 8px;"></i> Search Lyrics</h3>
+                <button class="sheet-close-btn" onclick="window.closeLyricsSearchModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="custom-modal-body">
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Song Title</label>
+                    <input type="text" id="lyricsSearchTitleInput" class="custom-text-input" placeholder="Title">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Artist Name</label>
+                    <input type="text" id="lyricsSearchArtistInput" class="custom-text-input" placeholder="Artist">
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 16px;">
+                    <button class="modal-btn-secondary" onclick="window.searchLyricsOnlineWeb()"><i class="fas fa-globe"></i> Web Search</button>
+                    <button class="modal-btn-primary" onclick="window.executeLyricsSearch()"><i class="fas fa-search"></i> Search Providers</button>
+                </div>
+                
+                <div id="lyricsSearchResultsContainer" class="lyrics-search-results">
+                    <!-- Results populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LYRICS EDIT MODAL -->
+    <div class="custom-modal-overlay" id="lyricsEditModal" onclick="window.closeLyricsEditModal(event)" style="display: none;">
+        <div class="custom-modal-box edit-modal-box" onclick="event.stopPropagation()">
+            <div class="custom-modal-header">
+                <h3><i class="fas fa-edit" style="color: var(--accent); margin-right: 8px;"></i> Edit Lyrics</h3>
+                <button class="sheet-close-btn" onclick="window.closeLyricsEditModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="custom-modal-body">
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Edit synchronized LRC tags (e.g. <code>[01:23.45] line</code>) or plain text lyrics.</p>
+                <textarea id="lyricsEditTextarea" class="lyrics-edit-textarea" rows="12"></textarea>
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;">
+                    <button class="modal-btn-secondary" onclick="window.closeLyricsEditModal()">Cancel</button>
+                    <button class="modal-btn-primary" onclick="window.saveEditedLyrics()"><i class="fas fa-save"></i> Save & Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LYRICS AI TRANSLATE MODAL -->
+    <div class="custom-modal-overlay" id="lyricsAiTranslateModal" onclick="window.closeAiTranslateModal(event)" style="display: none;">
+        <div class="custom-modal-box ai-modal-box" onclick="event.stopPropagation()">
+            <div class="custom-modal-header">
+                <h3><i class="fas fa-magic" style="color: var(--accent); margin-right: 8px;"></i> AI Lyrics Translation</h3>
+                <button class="sheet-close-btn" onclick="window.closeAiTranslateModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="custom-modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <!-- Target Language Selector Card -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 4px;">Translate to Language</label>
+                    <div class="lyrics-ai-selector-card" onclick="window.openLangSelectorModal()">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-globe" style="color: var(--accent);"></i>
+                            <span id="lyricsAiTargetLangDisplay" style="font-size: 14px; font-weight: 600;">Hinglish (Hindi in English)</span>
+                        </div>
+                        <i class="fas fa-chevron-right" style="color: var(--text-secondary); font-size: 12px;"></i>
+                    </div>
+                </div>
+
+                <!-- Translation Mode & Prompt Presets -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 4px;">Translation Mode</label>
+                    <select id="lyricsAiModeSelect" class="custom-text-input" onchange="window.onAiModeChange(this.value)">
+                        <option value="Literal">Literal (Accurate & Poetic)</option>
+                        <option value="Poetic">Poetic & Rhyming</option>
+                        <option value="Hinglish">Hinglish (Conversational Romanized)</option>
+                        <option value="Romanized">Romanized (Simple Latin Alphabet)</option>
+                        <option value="Transcribed">Transcribed (Phonetic Native Script)</option>
+                        <option value="Custom">Custom Prompt</option>
+                    </select>
+                </div>
+
+                <!-- Pre-added Prompt Presets Chips -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Pre-added Prompt Presets</label>
+                    <div class="lyrics-prompt-chips">
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('poetic')"><i class="fas fa-music"></i> Rhyming & Poetic</span>
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('hinglish')"><i class="fas fa-pen-fancy"></i> Singable Hinglish</span>
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('literal')"><i class="fas fa-check-double"></i> Accurate Meaning</span>
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('romanized')"><i class="fas fa-font"></i> Latin Romanized</span>
+                        <span class="prompt-chip" onclick="window.applyPromptPreset('meaning')"><i class="fas fa-lightbulb"></i> Song Meaning</span>
+                    </div>
+                </div>
+
+                <!-- Custom Prompt Instructions Textarea -->
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Custom Prompt Instructions (Optional)</label>
+                    <textarea id="lyricsAiCustomPrompt" class="custom-text-input" rows="2" placeholder="e.g. Translate into rhyming Hinglish keeping rhythmic syllables singable"></textarea>
+                </div>
+
+                <!-- Replace Original Lyrics Switch -->
+                <div class="lyrics-switch-row" onclick="window.toggleReplaceOriginalLyrics()">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Replace Original Lyrics</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">Show translated text directly in player instead of subtitle beneath</div>
+                    </div>
+                    <input type="checkbox" id="lyricsReplaceOriginalToggle" class="custom-checkbox" onclick="event.stopPropagation()" onchange="window.onReplaceOriginalToggleChange(this.checked)">
+                </div>
+
+                <!-- AI Model & Provider Accordion / Section -->
+                <div class="lyrics-ai-engine-settings">
+                    <div class="engine-settings-toggle" onclick="window.toggleAiEngineSettings()">
+                        <span style="font-size: 12px; font-weight: 600; color: #fff;"><i class="fas fa-sliders-h"></i> AI Provider & Model Settings</span>
+                        <i id="aiEngineSettingsChevron" class="fas fa-chevron-down" style="font-size: 11px;"></i>
+                    </div>
+                    <div id="aiEngineSettingsBody" style="display: none; padding-top: 10px;">
+                        <div style="margin-bottom: 8px;">
+                            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">AI Provider</label>
+                            <select id="lyricsAiProviderSelect" class="custom-text-input" onchange="window.onAiProviderChange(this.value)">
+                                <option value="OpenRouter">OpenRouter</option>
+                                <option value="Gemini">Gemini (Google AI Studio)</option>
+                                <option value="OpenAI">OpenAI</option>
+                                <option value="DeepL">DeepL</option>
+                                <option value="Claude">Claude (Anthropic)</option>
+                                <option value="Groq">Groq</option>
+                                <option value="Perplexity">Perplexity</option>
+                                <option value="XAi">xAI (Grok)</option>
+                                <option value="Mistral">Mistral AI</option>
+                                <option value="Nvidia">Nvidia NIM</option>
+                                <option value="OrcaRouter">OrcaRouter</option>
+                                <option value="Puter">Puter</option>
+                                <option value="Custom">Custom Provider</option>
+                            </select>
+                        </div>
+
+                        <div style="margin-bottom: 8px;">
+                            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Model</label>
+                            <select id="lyricsAiModelSelect" class="custom-text-input" onchange="window.onAiModelChange(this.value)">
+                                <!-- Populated dynamically -->
+                            </select>
+                            <input type="text" id="lyricsAiCustomModelInput" class="custom-text-input" style="display: none; margin-top: 6px;" placeholder="Enter custom model ID">
+                        </div>
+
+                        <div id="lyricsAiBaseUrlContainer" style="margin-bottom: 8px; display: none;">
+                            <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Base URL</label>
+                            <input type="text" id="lyricsAiBaseUrlInput" class="custom-text-input" placeholder="https://api...">
+                        </div>
+
+                        <div style="margin-bottom: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="font-size: 11px; color: var(--text-secondary);">API Key</label>
+                                <a id="lyricsAiKeyPortalLink" href="https://openrouter.ai/keys" target="_blank" style="font-size: 11px; color: var(--accent); text-decoration: none;">Get Key <i class="fas fa-external-link-alt"></i></a>
+                            </div>
+                            <div style="position: relative;">
+                                <input type="password" id="lyricsAiApiKeyInput" class="custom-text-input" placeholder="Enter API Key">
+                                <i id="lyricsAiKeyToggleEye" class="fas fa-eye" onclick="window.toggleAiKeyVisibility()" style="position: absolute; right: 12px; top: 12px; cursor: pointer; color: var(--text-secondary);"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress & Status Indicator -->
+                <div id="lyricsAiStatusContainer" class="lyrics-ai-status-box" style="display: none;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="lyrics-mini-spinner"></div>
+                        <div>
+                            <div id="lyricsAiStatusTitle" style="font-size: 12px; font-weight: 700; color: #fff;">Translating...</div>
+                            <div id="lyricsAiStatusSub" style="font-size: 11px; color: var(--text-secondary);">Preparing lines...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+                    <button class="modal-btn-secondary" onclick="window.closeAiTranslateModal()">Cancel</button>
+                    <button id="lyricsAiClearBtn" class="modal-btn-danger" onclick="window.clearAiTranslation()" style="display: none;"><i class="fas fa-trash"></i> Clear</button>
+                    <button id="lyricsAiSubmitBtn" class="modal-btn-primary" onclick="window.executeAiTranslation()"><i class="fas fa-magic"></i> Translate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LYRICS LANGUAGE SELECTOR MODAL -->
+    <div class="custom-modal-overlay" id="lyricsLangSelectorModal" onclick="window.closeLangSelectorModal(event)" style="display: none;">
+        <div class="custom-modal-box lang-modal-box" onclick="event.stopPropagation()">
+            <div class="custom-modal-header">
+                <h3><i class="fas fa-language" style="color: var(--accent); margin-right: 8px;"></i> Select Target Language</h3>
+                <button class="sheet-close-btn" onclick="window.closeLangSelectorModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="custom-modal-body">
+                <input type="text" id="lyricsLangSearchInput" class="custom-text-input" placeholder="Search language..." oninput="window.filterLanguages(this.value)">
+                <div id="lyricsLangListContainer" class="lyrics-lang-list">
+                    <!-- Populated dynamically with all 52 languages -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -804,14 +957,199 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='lyrics.js') }}?v={{ range(1, 999999) | random }}"></script>
-    <script src="{{ url_for('static', filename='stats.js') }}?v={{ range(1, 999999) | random }}"></script>
+    <!-- PLAYER BOTTOM SHEET (Android Style 3-Dot Popup) -->
+    <div class="player-more-sheet-overlay" id="playerMoreSheetOverlay" onclick="window.closePlayerMoreMenu(event)" style="display: none;">
+        <div class="player-more-sheet" id="playerMoreSheet" onclick="event.stopPropagation()">
+            <div class="sheet-handle-bar" onclick="window.closePlayerMoreMenu()"></div>
+            
+            <div class="sheet-header">
+                <div class="sheet-track-info">
+                    <img id="sheetTrackImage" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="skeleton" alt="Artwork">
+                    <div class="sheet-track-meta">
+                        <div id="sheetTrackTitle" class="sheet-track-title">No song playing</div>
+                        <div id="sheetTrackArtist" class="sheet-track-artist">AirBeats Player</div>
+                    </div>
+                </div>
+                <button class="sheet-close-btn" onclick="window.closePlayerMoreMenu()" title="Close menu">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
 
-    <!-- Firebase SDK -->
-    
-    
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="{{ url_for('static', filename='auth.js') }}?v={{ range(1, 999999) | random }}"></script>
+            <!-- Volume Control Section -->
+            <div class="sheet-volume-container">
+                <div class="sheet-volume-header">
+                    <span class="sheet-volume-label"><i class="fas fa-volume-up" id="sheetVolIcon"></i> Playback Volume</span>
+                    <span class="sheet-volume-val" id="sheetVolVal">100%</span>
+                </div>
+                <div class="sheet-volume-row">
+                    <button class="sheet-vol-mute-btn" id="sheetMuteBtn" onclick="window.toggleMute()" title="Mute/Unmute">
+                        <i class="fas fa-volume-up"></i>
+                    </button>
+                    <div class="sheet-slider-wrap">
+                        <input type="range" min="0" max="100" value="100" id="sheetVolumeSlider" class="sheet-volume-slider" oninput="window.onSheetVolumeInput(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Options Menu Items -->
+            <div class="sheet-options-list">
+                <!-- Always On Display Option -->
+                <div class="sheet-option-item aod-highlight" onclick="window.activateAlwaysOnDisplayFromSheet()">
+                    <div class="sheet-option-icon aod-icon">
+                        <i class="fas fa-moon"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Always On Display</div>
+                        <div class="sheet-option-subtitle">Activate ambient full-screen OLED player</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-expand"></i>
+                    </div>
+                </div>
+
+                <!-- Download Option -->
+                <div class="sheet-option-item" onclick="window.downloadFromSheet()">
+                    <div class="sheet-option-icon download-icon">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Download Track</div>
+                        <div class="sheet-option-subtitle">Save audio file to desktop</div>
+                    </div>
+                    <div class="sheet-option-action" id="sheetDownloadActionIcon">
+                        <i class="fas fa-arrow-down"></i>
+                    </div>
+                </div>
+
+                <!-- Listen Together Option -->
+                <div class="sheet-option-item" onclick="window.listenTogetherFromSheet()">
+                    <div class="sheet-option-icon listen-together-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Listen Together</div>
+                        <div class="sheet-option-subtitle">Stream in real-time with friends</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+
+                <!-- Add to Playlist Option -->
+                <div class="sheet-option-item" onclick="window.addToPlaylistFromSheet()">
+                    <div class="sheet-option-icon playlist-icon">
+                        <i class="fas fa-folder-plus"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Add to Playlist</div>
+                        <div class="sheet-option-subtitle">Save into desktop library playlist</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+
+                <!-- Synchronized Lyrics Option -->
+                <div class="sheet-option-item" onclick="window.lyricsFromSheet()">
+                    <div class="sheet-option-icon lyrics-icon">
+                        <i class="fas fa-microphone-alt"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">Synchronized Lyrics</div>
+                        <div class="sheet-option-subtitle">Real-time karaoke style scrolling lyrics</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+
+                <!-- AOD Customization Settings Shortcut -->
+                <div class="sheet-option-item" onclick="window.openAodSettingsFromSheet()">
+                    <div class="sheet-option-icon settings-icon">
+                        <i class="fas fa-sliders-h"></i>
+                    </div>
+                    <div class="sheet-option-text">
+                        <div class="sheet-option-title">AOD Customization</div>
+                        <div class="sheet-option-subtitle">Configure styles, shapes, clock & animations in Settings</div>
+                    </div>
+                    <div class="sheet-option-action">
+                        <i class="fas fa-cog"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ALWAYS ON DISPLAY (AOD) FULL-SCREEN OVERLAY -->
+    <div id="alwaysOnDisplayOverlay" class="aod-overlay" style="display: none;">
+        <!-- Ambient background & spotlight layers -->
+        <div id="aodBackgroundLayer" class="aod-bg-layer"></div>
+        <div id="aodSpotlightLayer" class="aod-spotlight-layer"></div>
+
+        <!-- AOD Top Navigation Bar -->
+        <div class="aod-top-bar">
+            <button class="aod-back-btn" onclick="window.exitAlwaysOnDisplay()" title="Exit Always On Display (Esc)">
+                <i class="fas fa-chevron-left"></i> <span>Exit</span>
+            </button>
+            <div id="aodClock" class="aod-clock">12:00</div>
+            <div class="aod-top-actions">
+                <a href="#settings/aod" onclick="window.exitAlwaysOnDisplay()" class="aod-icon-link" title="AOD Customization">
+                    <i class="fas fa-cog"></i>
+                </a>
+                <button class="aod-icon-link" onclick="window.exitAlwaysOnDisplay()" title="Exit Full Screen (Esc)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- AOD Content Container -->
+        <div id="aodContentContainer" class="aod-content aod-style-classic">
+            <!-- Album Artwork -->
+            <div class="aod-art-wrapper" id="aodArtWrapper">
+                <img id="aodArtImage" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" class="aod-art aod-shape-rounded" alt="Album Artwork">
+            </div>
+
+            <!-- Song Info -->
+            <div class="aod-track-info" id="aodTrackInfo">
+                <div id="aodTitle" class="aod-title">No Song Playing</div>
+                <div id="aodArtist" class="aod-artist">AirBeats Ambient Display</div>
+            </div>
+
+            <!-- Scrubber / Progress Bar -->
+            <div class="aod-progress-section" id="aodProgressSection">
+                <div class="aod-progress-bar-container" id="aodProgressBarContainer" onclick="window.onAodProgressClick(event)">
+                    <div class="aod-progress-track">
+                        <div class="aod-progress-fill" id="aodProgressFill"></div>
+                        <div class="aod-progress-thumb" id="aodProgressThumb"></div>
+                    </div>
+                </div>
+                <div class="aod-time-row" id="aodTimeRow">
+                    <span id="aodCurrentTime">0:00</span>
+                    <span id="aodDuration">0:00</span>
+                </div>
+            </div>
+
+            <!-- Playback Controls -->
+            <div class="aod-controls-row" id="aodControlsRow">
+                <button class="aod-ctrl-btn" id="aodPrevBtn" onclick="window.aodPrevTrack()" title="Previous">
+                    <i class="fas fa-step-backward"></i>
+                </button>
+                <button class="aod-play-btn" id="aodPlayBtn" onclick="window.aodTogglePlay()" title="Play / Pause">
+                    <i class="fas fa-play" id="aodPlayIcon"></i>
+                </button>
+                <button class="aod-ctrl-btn" id="aodNextBtn" onclick="window.aodNextTrack()" title="Next">
+                    <i class="fas fa-step-forward"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Touch/Click hint -->
+        <div class="aod-footer-hint">
+            <span>Press <kbd>Esc</kbd> or tap Exit to leave Always On Display</span>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='lyrics.js') }}?v={{ range(1, 999999) | random }}"></script>
 
 </body>
 </html>

@@ -2417,9 +2417,11 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
 }
 
 .home-container {
-    padding: 10px 30px 100px 30px;
+    padding: 10px 0 100px 0;
     animation: homeFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* CHIPS BAR */
@@ -3667,17 +3669,47 @@ body.animated-waveform.is-playing .wave-bar:nth-child(13n) { animation-delay: -0
 /* ==========================================================================
    NOW PLAYING RIGHT PANEL AUTO-HIDE & FULL-WIDTH EXPANSION
    ========================================================================== */
+body.route-home .right-panel,
 body:not(.has-active-track) .right-panel,
 body.right-panel-collapsed .right-panel {
     display: none !important;
 }
 
+body.route-home .main-content,
 body:not(.has-active-track) .main-content,
 body.right-panel-collapsed .main-content {
     border-right: none !important;
     flex: 1 1 100% !important;
     width: 100% !important;
     max-width: 100% !important;
+}
+
+/* Eliminate redundant side space in Home screen */
+body.route-home .scroll-container,
+.scroll-container:has(.home-container) {
+    padding-left: 32px !important;
+    padding-right: 16px !important;
+}
+
+body.route-home .home-container {
+    padding: 10px 0 100px 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+body.route-home .home-shelf {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+body.route-home .home-shelf-header {
+    padding-right: 6px;
+}
+
+body.route-home .shelf-scroll-row {
+    padding-right: 14px;
 }
 
 .right-panel {

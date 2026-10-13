@@ -4542,12 +4542,144 @@ window.StatsEngine = {
         `;
     },
 
-    // Seed events from playHistory / favorites if empty
+    getSongThumbnail: function(songId, image) {
+        if (image && typeof image === 'string' && !image.includes('ui-avatars.com') && !image.includes('placeholder')) {
+            return image;
+        }
+        const cleanId = songId ? String(songId).replace(/^seed_/, '').split('_')[0] : '';
+        if (cleanId) {
+            return `https://i.ytimg.com/vi/${cleanId}/hqdefault.jpg`;
+        }
+        return image || '';
+    },
+
+    getArtistImage: function(artistName, artistId, evArtistImage) {
+        if (evArtistImage && typeof evArtistImage === 'string' && !evArtistImage.includes('ui-avatars.com') && !evArtistImage.includes('placeholder')) {
+            this.setCachedArtistImage(artistName, artistId, evArtistImage);
+            return evArtistImage;
+        }
+        let cache = {};
+        try { cache = JSON.parse(localStorage.getItem('airbeats_artist_images') || '{}'); } catch(e) {}
+        if (artistName && cache[artistName]) return cache[artistName];
+        if (artistId && cache[artistId]) return cache[artistId];
+
+        let subs = {};
+        try { subs = JSON.parse(localStorage.getItem('subscribed_artists') || '{}'); } catch(e) {}
+        if (artistId && subs[artistId] && subs[artistId].image) {
+            const sImg = subs[artistId].image;
+            if (sImg && !sImg.includes('ui-avatars') && !sImg.includes('placeholder')) return sImg;
+        }
+        const subMatch = Object.values(subs).find(s => s && s.name && s.name.toLowerCase() === (artistName || '').toLowerCase());
+        if (subMatch && subMatch.image && !subMatch.image.includes('ui-avatars') && !subMatch.image.includes('placeholder')) {
+            return subMatch.image;
+        }
+
+        return '';
+    },
+
+    setCachedArtistImage: function(artistName, artistId, imageUrl) {
+        if (!imageUrl || imageUrl.includes('ui-avatars') || imageUrl.includes('placeholder')) return;
+        try {
+            let cache = JSON.parse(localStorage.getItem('airbeats_artist_images') || '{}');
+            if (artistName) cache[artistName] = imageUrl;
+            if (artistId) cache[artistId] = imageUrl;
+            localStorage.setItem('airbeats_artist_images', JSON.stringify(cache));
+        } catch(e) {}
+    },
+
+    getArtistPlaceholderSvg: function(name) {
+        const initial = (name ? name.trim().charAt(0) : 'A').toUpperCase();
+        const colors = [
+            ['#ec4899', '#8b5cf6'],
+            ['#3b82f6', '#06b6d4'],
+            ['#10b981', '#3b82f6'],
+            ['#f59e0b', '#ef4444'],
+            ['#8b5cf6', '#6366f1'],
+            ['#00c6ff', '#0072ff']
+        ];
+        let hash = 0;
+        for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        const [c1, c2] = colors[Math.abs(hash) % colors.length];
+        const gradId = `art_svg_${Math.abs(hash)}`;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#${gradId})"/><text x="50" y="58" font-size="42" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`;
+        return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    },
+
+    pendingArtistFetches: new Set(),
+
+    fetchArtistImageAsync: async function(artistName, artistId) {
+        if (!artistName || artistName === 'Unknown Artist') return;
+        const key = artistId || artistName;
+        if (this.pendingArtistFetches.has(key)) return;
+        this.pendingArtistFetches.add(key);
+
+        try {
+            let fetchedUrl = '';
+            if (artistId && (artistId.startsWith('UC') || artistId.startsWith('MPRE'))) {
+                try {
+                    const r = await fetch(`/api/artists?id=${encodeURIComponent(artistId)}`);
+                    const d = await r.json();
+                    if (d && d.success && d.data && d.data.image) {
+                        fetchedUrl = getHighestQualityImage(d.data.image);
+                    }
+                } catch(e) {}
+            }
+            if (!fetchedUrl || fetchedUrl.includes('placeholder')) {
+                const r = await fetch(`/api/search/artists?query=${encodeURIComponent(artistName)}`);
+                const d = await r.json();
+                const list = (d && d.data && (d.data.results || d.data)) || [];
+                if (Array.isArray(list) && list.length > 0) {
+                    const first = list[0];
+                    if (first && first.image) {
+                        fetchedUrl = getHighestQualityImage(first.image);
+                    }
+                }
+            }
+            if (fetchedUrl && !fetchedUrl.includes('placeholder') && !fetchedUrl.includes('ui-avatars')) {
+                this.setCachedArtistImage(artistName, artistId, fetchedUrl);
+                const escapedName = (artistName || '').replace(/"/g, '\\"');
+                document.querySelectorAll(`img[data-artist-name="${escapedName}"]`).forEach(img => {
+                    img.src = fetchedUrl;
+                });
+            }
+        } catch(err) {
+            console.warn('[StatsEngine] Artist image fetch notice:', artistName, err);
+        } finally {
+            this.pendingArtistFetches.delete(key);
+        }
+    },
+
+    // Seed events from playHistory / favorites if empty, and sanitize existing events
     getEvents: function() {
         let events = [];
         try {
             events = JSON.parse(localStorage.getItem('airbeats_stats_events') || '[]');
         } catch(e) { events = []; }
+
+        // Sanitize any existing events stored in user's browser localStorage
+        let updatedCount = 0;
+        if (Array.isArray(events) && events.length > 0) {
+            events.forEach(ev => {
+                if (!ev) return;
+                const songId = ev.songId || (ev.id && ev.id.startsWith('seed_') ? ev.id.split('_')[1] : ev.id);
+                if (!ev.image || ev.image.includes('ui-avatars.com') || ev.image.includes('placeholder')) {
+                    ev.image = this.getSongThumbnail(songId, ev.image);
+                    updatedCount++;
+                }
+                if (!ev.artistImage || ev.artistImage.includes('ui-avatars.com')) {
+                    const cachedArt = this.getArtistImage(ev.artist, ev.artistId, '');
+                    if (cachedArt) {
+                        ev.artistImage = cachedArt;
+                        updatedCount++;
+                    }
+                }
+            });
+            if (updatedCount > 0) {
+                try {
+                    localStorage.setItem('airbeats_stats_events', JSON.stringify(events));
+                } catch(e) {}
+            }
+        }
 
         if (!events || events.length === 0) {
             // Seed from playHistory
@@ -4561,16 +4693,23 @@ window.StatsEngine = {
                     if (!t || !t.id) return;
                     const dur = t.duration ? parseInt(t.duration, 10) : 210;
                     const playCount = Math.max(1, Math.floor(Math.random() * 5) + 1);
+                    const rawSongImg = (t.image && (t.image[2] ? t.image[2].url : (t.image[1] ? t.image[1].url : t.image))) || t.image;
+                    const songImg = this.getSongThumbnail(t.id, rawSongImg);
+                    const artName = (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].name) || t.artist || 'Unknown Artist';
+                    const artId = (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].id) || t.artistIds || '';
+                    const artImg = (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].image) || this.getArtistImage(artName, artId, '');
+
                     for (let c = 0; c < playCount; c++) {
                         events.push({
                             id: `seed_${t.id}_${c}`,
                             songId: t.id,
                             title: t.title || t.name || 'Unknown Track',
-                            artist: (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].name) || t.artist || 'Unknown Artist',
-                            artistId: (t.artists && t.artists.primary && t.artists.primary[0] && t.artists.primary[0].id) || t.artistIds || '',
+                            artist: artName,
+                            artistId: artId,
+                            artistImage: artImg || '',
                             album: (t.album && (t.album.title || t.album.name || t.album)) || '',
                             albumId: (t.album && t.album.id) || '',
-                            image: (t.image && (t.image[2] ? t.image[2].url : (t.image[1] ? t.image[1].url : t.image))) || 'https://ui-avatars.com/api/?name=Song&background=333&color=fff',
+                            image: songImg,
                             duration: dur,
                             timeListenedMs: dur * 1000,
                             timestamp: new Date(now - (i * 3600000 * 6) - (c * 86400000)).toISOString()
@@ -4594,15 +4733,22 @@ window.StatsEngine = {
         const dur = track.duration ? parseInt(track.duration, 10) : 210;
         const validMs = Math.max(15000, parseInt(listenedMs, 10) || (dur * 1000));
         
+        const rawSongImg = (track.image && (track.image[2] ? track.image[2].url : (track.image[1] ? track.image[1].url : track.image))) || track.image;
+        const songImg = this.getSongThumbnail(track.id, rawSongImg);
+        const artName = (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].name) || track.artist || 'Unknown Artist';
+        const artId = (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].id) || track.artistIds || '';
+        const artImg = (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].image) || this.getArtistImage(artName, artId, track.artistImage || '');
+
         const newEvent = {
             id: `ev_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             songId: track.id,
             title: track.title || track.name || 'Unknown Track',
-            artist: (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].name) || track.artist || 'Unknown Artist',
-            artistId: (track.artists && track.artists.primary && track.artists.primary[0] && track.artists.primary[0].id) || track.artistIds || '',
+            artist: artName,
+            artistId: artId,
+            artistImage: artImg || '',
             album: (track.album && (track.album.title || track.album.name || track.album)) || '',
             albumId: (track.album && track.album.id) || '',
-            image: (track.image && (track.image[2] ? track.image[2].url : (track.image[1] ? track.image[1].url : track.image))) || 'https://ui-avatars.com/api/?name=Song&background=333&color=fff',
+            image: songImg,
             duration: dur,
             timeListenedMs: validMs,
             timestamp: new Date().toISOString()
@@ -4646,6 +4792,13 @@ window.StatsEngine = {
         
         let addedCount = 0;
         importedEvents.forEach(ev => {
+            const songId = ev.songId || (ev.id && ev.id.startsWith('seed_') ? ev.id.split('_')[1] : ev.id);
+            if (!ev.image || ev.image.includes('ui-avatars.com') || ev.image.includes('placeholder')) {
+                ev.image = this.getSongThumbnail(songId, ev.image);
+            }
+            if (ev.artistImage && !ev.artistImage.includes('ui-avatars.com')) {
+                this.setCachedArtistImage(ev.artist, ev.artistId, ev.artistImage);
+            }
             const key = ev.id || `${ev.songId}_${ev.timestamp}`;
             if (!existingIds.has(key)) {
                 existingIds.add(key);
@@ -4774,13 +4927,14 @@ window.StatsEngine = {
             const songId = ev.songId || ev.id;
             if (songId) {
                 if (!songMap.has(songId)) {
+                    const songImg = this.getSongThumbnail(songId, ev.image);
                     songMap.set(songId, {
                         id: songId,
                         title: ev.title || 'Unknown Track',
                         artist: ev.artist || 'Unknown Artist',
                         artistId: ev.artistId || '',
                         album: ev.album || '',
-                        image: ev.image || 'https://ui-avatars.com/api/?name=Song&background=333&color=fff',
+                        image: songImg,
                         playCount: 0,
                         totalListenMs: 0
                     });
@@ -4794,13 +4948,24 @@ window.StatsEngine = {
             const artistName = ev.artist || 'Unknown Artist';
             if (artistName && artistName !== 'Unknown Artist') {
                 if (!artistMap.has(artistName)) {
+                    let artImg = this.getArtistImage(artistName, ev.artistId, ev.artistImage);
+                    if (!artImg) {
+                        artImg = this.getArtistPlaceholderSvg(artistName);
+                        this.fetchArtistImageAsync(artistName, ev.artistId);
+                    }
                     artistMap.set(artistName, {
                         id: ev.artistId || artistName,
                         name: artistName,
-                        image: ev.image || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(artistName),
+                        image: artImg,
                         playCount: 0,
                         totalListenMs: 0
                     });
+                } else {
+                    const a = artistMap.get(artistName);
+                    if ((!a.image || a.image.startsWith('data:image/svg')) && ev.artistImage && !ev.artistImage.includes('ui-avatars')) {
+                        a.image = ev.artistImage;
+                        this.setCachedArtistImage(artistName, ev.artistId, ev.artistImage);
+                    }
                 }
                 const a = artistMap.get(artistName);
                 a.playCount++;
@@ -4811,11 +4976,12 @@ window.StatsEngine = {
             const albumName = ev.album || '';
             if (albumName) {
                 if (!albumMap.has(albumName)) {
+                    const albImg = (ev.image && !ev.image.includes('ui-avatars') && !ev.image.includes('placeholder')) ? ev.image : this.getSongThumbnail(songId, ev.image);
                     albumMap.set(albumName, {
                         id: ev.albumId || albumName,
                         title: albumName,
                         artist: ev.artist || '',
-                        image: ev.image || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(albumName),
+                        image: albImg,
                         playCount: 0,
                         totalListenMs: 0
                     });
@@ -5064,7 +5230,7 @@ async function renderStats() {
                         return `
                         <div class="stats-chart-row">
                             <span class="stats-chart-rank" style="${idx === 0 ? 'color: #ffd700;' : (idx === 1 ? 'color: #c0c0c0;' : (idx === 2 ? 'color: #cd7f32;' : ''))}">#${idx + 1}</span>
-                            <img src="${s.image}" class="stats-chart-thumb" alt="${s.title}">
+                            <img src="${s.image}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src='https://i.ytimg.com/vi/${s.id}/hqdefault.jpg';}" class="stats-chart-thumb" alt="${s.title}">
                             <div class="stats-chart-info">
                                 <div class="stats-chart-song-title" title="${s.title}">${s.title}</div>
                                 <div class="stats-chart-song-artist" title="${s.artist}">${s.artist}</div>
@@ -5096,7 +5262,7 @@ async function renderStats() {
                         ${agg.topSongs.slice(0, 12).map((s, idx) => `
                             <div class="stats-item-card" onclick="window.playSingleTrack('${s.id}')">
                                 <div class="stats-item-thumb-wrap">
-                                    <img src="${s.image}" class="stats-item-thumb" alt="${s.title}">
+                                    <img src="${s.image}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src='https://i.ytimg.com/vi/${s.id}/hqdefault.jpg';}" class="stats-item-thumb" alt="${s.title}">
                                     <div class="stats-item-play-overlay">
                                         <div class="stats-item-play-btn"><i class="fas fa-play"></i></div>
                                     </div>
@@ -5122,7 +5288,7 @@ async function renderStats() {
                         ${agg.topArtists.slice(0, 12).map((a, idx) => `
                             <div class="stats-item-card" onclick="location.hash='#artist/${a.id}'">
                                 <div class="stats-item-thumb-wrap round">
-                                    <img src="${a.image}" class="stats-item-thumb" alt="${a.name}">
+                                    <img src="${a.image}" data-artist-name="${a.name}" data-artist-id="${a.id}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${a.name.replace(/'/g, "\\'")}');}" class="stats-item-thumb" alt="${a.name}">
                                 </div>
                                 <div class="stats-item-title" style="text-align: center;">${idx + 1}. ${a.name}</div>
                                 <div style="text-align: center;">
@@ -5146,7 +5312,7 @@ async function renderStats() {
                         ${agg.topAlbums.slice(0, 12).map((alb, idx) => `
                             <div class="stats-item-card" onclick="location.hash='#album/${alb.id}'">
                                 <div class="stats-item-thumb-wrap">
-                                    <img src="${alb.image}" class="stats-item-thumb" alt="${alb.title}">
+                                    <img src="${alb.image}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src='https://via.placeholder.com/150';}" class="stats-item-thumb" alt="${alb.title}">
                                 </div>
                                 <div class="stats-item-title" title="${alb.title}">${idx + 1}. ${alb.title}</div>
                                 <div class="stats-item-sub" title="${alb.artist}">${alb.artist}</div>
@@ -5164,6 +5330,15 @@ async function renderStats() {
     `;
 
     globalLoading.style.display = 'none';
+
+    // Auto-fetch authentic artist photos for any visible artists currently using placeholder
+    if (agg.topArtists && agg.topArtists.length > 0) {
+        agg.topArtists.slice(0, 12).forEach(a => {
+            if (!a.image || a.image.startsWith('data:image/svg')) {
+                window.StatsEngine.fetchArtistImageAsync(a.name, a.id);
+            }
+        });
+    }
 }
 
 window.switchStatsMode = function(mode) {
@@ -5236,7 +5411,7 @@ window.openInsightModal = function() {
             <!-- KEY HIGHLIGHTS -->
             <div class="insight-highlights-grid">
                 <div class="insight-mini-card">
-                    <img src="${topSong ? topSong.image : 'https://ui-avatars.com/api/?name=Song'}" class="insight-mini-thumb" alt="Top Track">
+                    <img src="${topSong ? topSong.image : window.StatsEngine.getSongThumbnail('', '')}" onerror="if(!this.dataset.errored){this.dataset.errored='1';if('${topSong ? topSong.id : ''}')this.src='https://i.ytimg.com/vi/${topSong ? topSong.id : ''}/hqdefault.jpg';}" class="insight-mini-thumb" alt="Top Track">
                     <div style="overflow: hidden;">
                         <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;">Top Track</div>
                         <div style="font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -5249,7 +5424,7 @@ window.openInsightModal = function() {
                 </div>
 
                 <div class="insight-mini-card">
-                    <img src="${topArtist ? topArtist.image : 'https://ui-avatars.com/api/?name=Artist'}" class="insight-mini-thumb round" alt="Top Artist">
+                    <img src="${topArtist ? topArtist.image : window.StatsEngine.getArtistPlaceholderSvg('Artist')}" data-artist-name="${topArtist ? topArtist.name : ''}" data-artist-id="${topArtist ? topArtist.id : ''}" onerror="if(!this.dataset.errored){this.dataset.errored='1';this.src=window.StatsEngine.getArtistPlaceholderSvg('${topArtist ? topArtist.name.replace(/'/g, "\\'") : 'Artist'}');}" class="insight-mini-thumb round" alt="Top Artist">
                     <div style="overflow: hidden;">
                         <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase;">Top Artist</div>
                         <div style="font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -5299,6 +5474,10 @@ window.openInsightModal = function() {
     `;
 
     document.body.appendChild(overlay);
+
+    if (topArtist && (!topArtist.image || topArtist.image.startsWith('data:image/svg'))) {
+        window.StatsEngine.fetchArtistImageAsync(topArtist.name, topArtist.id);
+    }
 };
 
 window.closeInsightModal = function() {

@@ -110,15 +110,28 @@ def restore_backup():
                     conn = sqlite3.connect(db_path)
                     cursor = conn.cursor()
                     
+                    # Helper columns info
+                    cursor.execute("PRAGMA table_info(song);")
+                    s_cols = [c[1] for c in cursor.fetchall()]
+                    has_song_thumb = 'thumbnailUrl' in s_cols
+                    song_thumb_expr = "s.thumbnailUrl" if has_song_thumb else "NULL"
+
+                    cursor.execute("PRAGMA table_info(artist);")
+                    a_cols = [c[1] for c in cursor.fetchall()]
+                    has_art_thumb = 'thumbnailUrl' in a_cols
+                    art_thumb_expr = "a.thumbnailUrl" if has_art_thumb else "NULL"
+
                     # 1. Query History from event joined with song & artist
                     try:
-                        query = """
+                        query = f"""
                         SELECT 
                             s.id, 
                             s.title, 
                             s.duration,
+                            {song_thumb_expr} as thumbnailUrl,
                             a.id as artistId,
                             a.name as artistName,
+                            {art_thumb_expr} as artistThumbnailUrl,
                             e.timestamp
                         FROM event e
                         JOIN song s ON e.songId = s.id
@@ -129,7 +142,8 @@ def restore_backup():
                         """
                         cursor.execute(query)
                         for row in cursor.fetchall():
-                            song_id, title, duration, artist_id, artist_name, timestamp = row
+                            song_id, title, duration, thumb, artist_id, artist_name, art_thumb, timestamp = row
+                            song_img = thumb if (thumb and "ui-avatars" not in thumb) else (f"https://i.ytimg.com/vi/{song_id}/hqdefault.jpg" if song_id else "")
                             history.append({
                                 "id": song_id,
                                 "name": title,
@@ -137,8 +151,9 @@ def restore_backup():
                                 "artist": artist_name or "Unknown Artist",
                                 "subtitle": artist_name or "Unknown Artist",
                                 "type": "song",
-                                "image": "https://ui-avatars.com/api/?name=Song&background=333&color=fff",
+                                "image": song_img,
                                 "artistIds": artist_id or "",
+                                "artistImage": art_thumb if (art_thumb and "ui-avatars" not in art_thumb) else "",
                                 "playedAt": timestamp
                             })
                     except Exception as e_hist:
@@ -146,17 +161,15 @@ def restore_backup():
 
                     # 2. Query Favorites
                     try:
-                        cursor.execute("PRAGMA table_info(song);")
-                        cols = [c[1] for c in cursor.fetchall()]
                         fav_where = None
-                        if 'inLibrary' in cols:
+                        if 'inLibrary' in s_cols:
                             fav_where = "s.inLibrary = 1"
-                        elif 'favorite' in cols:
+                        elif 'favorite' in s_cols:
                             fav_where = "s.favorite = 1"
                         
                         if fav_where:
                             cursor.execute(f"""
-                                SELECT s.id, s.title, s.duration, a.name
+                                SELECT s.id, s.title, s.duration, a.name, {song_thumb_expr}
                                 FROM song s
                                 LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0
                                 LEFT JOIN artist a ON sam.artistId = a.id
@@ -164,12 +177,16 @@ def restore_backup():
                                 ORDER BY s.id DESC
                             """)
                             for f_row in cursor.fetchall():
+                                s_id = f_row[0]
+                                f_thumb = f_row[4]
+                                f_img = f_thumb if (f_thumb and "ui-avatars" not in f_thumb) else (f"https://i.ytimg.com/vi/{s_id}/hqdefault.jpg" if s_id else "")
                                 favorites.append({
-                                    "id": f_row[0],
+                                    "id": s_id,
                                     "name": f_row[1],
                                     "title": f_row[1],
                                     "artist": f_row[3] or "Unknown Artist",
-                                    "duration": f_row[2] or 0
+                                    "duration": f_row[2] or 0,
+                                    "image": f_img
                                 })
                     except Exception as e_fav:
                         print(f"[BACKUP] Favorites parse notice: {e_fav}")
@@ -187,8 +204,8 @@ def restore_backup():
                             for pid, ptitle in p_rows:
                                 songs = []
                                 if has_psm:
-                                    cursor.execute("""
-                                        SELECT s.id, s.title, s.duration, a.name
+                                    cursor.execute(f"""
+                                        SELECT s.id, s.title, s.duration, a.name, {song_thumb_expr}
                                         FROM playlist_song_map psm
                                         JOIN song s ON psm.songId = s.id
                                         LEFT JOIN song_artist_map sam ON s.id = sam.songId AND sam.position = 0
@@ -197,12 +214,16 @@ def restore_backup():
                                         ORDER BY psm.position ASC
                                     """, (pid,))
                                     for s_row in cursor.fetchall():
+                                        ps_id = s_row[0]
+                                        ps_thumb = s_row[4]
+                                        ps_img = ps_thumb if (ps_thumb and "ui-avatars" not in ps_thumb) else (f"https://i.ytimg.com/vi/{ps_id}/hqdefault.jpg" if ps_id else "")
                                         songs.append({
-                                            "id": s_row[0],
+                                            "id": ps_id,
                                             "name": s_row[1],
                                             "title": s_row[1],
                                             "artist": s_row[3] or "Unknown Artist",
-                                            "duration": s_row[2] or 0
+                                            "duration": s_row[2] or 0,
+                                            "image": ps_img
                                         })
                                 playlists.append({
                                     "id": f"pl_{pid}",
@@ -220,16 +241,12 @@ def restore_backup():
                         if cursor.fetchone():
                             cursor.execute("PRAGMA table_info(event);")
                             e_cols = [c[1] for c in cursor.fetchall()]
-                            cursor.execute("PRAGMA table_info(song);")
-                            s_cols = [c[1] for c in cursor.fetchall()]
 
                             has_play_time = 'playTime' in e_cols
-                            has_thumb = 'thumbnailUrl' in s_cols
                             has_album_id = 'albumId' in s_cols
                             has_album_name = 'albumName' in s_cols
 
                             play_time_expr = "e.playTime" if has_play_time else "COALESCE(s.duration * 1000, 180000)"
-                            thumb_expr = "s.thumbnailUrl" if has_thumb else "NULL"
                             album_id_expr = "s.albumId" if has_album_id else "NULL"
                             album_name_expr = "s.albumName" if has_album_name else "NULL"
 
@@ -238,11 +255,12 @@ def restore_backup():
                                 e.songId,
                                 s.title,
                                 s.duration,
-                                {thumb_expr} as thumbnailUrl,
+                                {song_thumb_expr} as thumbnailUrl,
                                 {album_id_expr} as albumId,
                                 {album_name_expr} as albumName,
                                 a.id as artistId,
                                 a.name as artistName,
+                                {art_thumb_expr} as artistThumbnailUrl,
                                 e.timestamp,
                                 {play_time_expr} as playTime
                             FROM event e
@@ -253,15 +271,17 @@ def restore_backup():
                             """
                             cursor.execute(events_query)
                             for ev_row in cursor.fetchall():
-                                song_id, title, duration, thumb, alb_id, alb_name, art_id, art_name, t_stamp, p_time = ev_row
+                                song_id, title, duration, thumb, alb_id, alb_name, art_id, art_name, art_thumb, t_stamp, p_time = ev_row
+                                song_img = thumb if (thumb and "ui-avatars" not in thumb) else (f"https://i.ytimg.com/vi/{song_id}/hqdefault.jpg" if song_id else "")
                                 stats_events.append({
                                     "songId": song_id,
                                     "title": title or "Unknown Track",
                                     "artist": art_name or "Unknown Artist",
                                     "artistId": art_id or "",
+                                    "artistImage": art_thumb if (art_thumb and "ui-avatars" not in art_thumb) else "",
                                     "album": alb_name or "",
                                     "albumId": alb_id or "",
-                                    "image": thumb or "https://ui-avatars.com/api/?name=Song&background=333&color=fff",
+                                    "image": song_img,
                                     "duration": duration or 0,
                                     "timeListenedMs": int(p_time if p_time is not None else (duration * 1000 if duration else 180000)),
                                     "timestamp": t_stamp

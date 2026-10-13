@@ -389,7 +389,7 @@ const router = async (forceRefresh = false) => {
     // Update active nav
         document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(el => el.classList.remove('active'));
     let navId = `nav-${route}`;
-    if (route === 'settings') navId = `nav-settings-${id}`;
+    if (route === 'settings') navId = `nav-settings-${id || 'backup'}`;
     if (route === 'developer-news' || route === 'developer_news' || route === 'news') navId = 'nav-settings-developer-news';
         if (document.getElementById(navId)) {
         document.getElementById(navId).classList.add('active');

@@ -358,17 +358,6 @@ window.__discordStart = null;
 const RPC_PREF = 'discord_rpc_enabled';
 window.discordRpcEnabled = localStorage.getItem(RPC_PREF) !== 'false';
 
-window.discordPref = function(key, def) {
-    try { const v = localStorage.getItem(key); return v === null ? def : v === 'true'; }
-    catch (e) { return def; }
-};
-window.rpcImages = window.discordPref('rpc_images', true);
-
-window.discordTogglePref = function(key, el) {
-    try { localStorage.setItem(key, el.checked ? 'true' : 'false'); } catch (e) {}
-    if (key === 'rpc_images') window.rpcImages = !!el.checked;
-    window.syncDiscordActivity();
-};
 
 window.discordToggleRpc = function(el) {
     window.discordRpcEnabled = !!el.checked;
@@ -388,8 +377,6 @@ window.__discordSyncNow = function() {
         window.discordAPI.setActivity({ details: '', state: '' });
         return;
     }
-    window.rpcImages = window.discordPref('rpc_images', true);
-
     const playing = document.body.classList.contains('is-playing');
     if (playing && !window.__discordStart) window.__discordStart = Date.now();
     if (!playing) window.__discordStart = null;
@@ -412,17 +399,17 @@ window.__discordSyncNow = function() {
     window.discordAPI.setActivity({
         details: t.name || '',
         state: t.artists?.primary?.[0]?.name || '',
-        largeImage: window.rpcImages ? getHighestQualityImage(t.image) : null,
-        largeText: window.rpcImages ? t.name : null,
-        smallImage: window.rpcImages ? 'https://airbeats.org/logo.png' : null,
-        smallText: window.rpcImages ? 'AirBeats' : null,
+        largeImage: getHighestQualityImage(t.image),
+        largeText: t.name,
+        smallImage: 'https://raw.githubusercontent.com/d0x-dev/Airbeats-Desktop/main/electron-app/icon.png',
+        smallText: 'AirBeats',
         startTimestamp: start,
         endTimestamp: end,
         paused: !playing
     });
     if (window.dlog) {
-        window.dlog('sync imgs=' + window.rpcImages + ' playing=' + playing
-            + ' t=' + (t.name || '') + ' @' + new Error().stack.split('\n')[2]);
+        window.dlog('sync playing=' + playing + ' t=' + (t.name || '')
+            + ' @' + ((new Error().stack || '').split('\n')[2] || '(?)'));
     }
 };
 
@@ -3473,6 +3460,18 @@ async function renderSettingsAppearance() {
 
               <div id="discord-status-box" style="margin-bottom: 16px; font-size: 14px; color: var(--text-secondary);"></div>
 
+              <style>
+                  .m3-switch{position:relative;display:inline-flex;align-items:center;width:52px;height:32px;flex:none;cursor:pointer}
+                  .m3-switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+                  .m3-track{position:absolute;inset:0;border-radius:16px;background:var(--text-secondary);opacity:.32;transition:background .2s ease,opacity .2s ease}
+                  .m3-knob{position:absolute;top:8px;left:8px;width:16px;height:16px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0;transition:all .2s ease}
+                  .m3-knob i{line-height:1}
+                  .m3-switch input:checked ~ .m3-track{background:var(--accent);opacity:1}
+                  .m3-switch input:checked ~ .m3-track .m3-knob{top:4px;left:4px;width:24px;height:24px;font-size:13px}
+                  .m3-switch:hover .m3-track{opacity:.42}
+                  .m3-switch input:checked:hover ~ .m3-track{opacity:.92}
+              </style>
+
               <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
                   <button id="btn-discord-login" class="btn" style="background: #5865F2; color: #fff; padding: 12px 24px; border-radius: 8px; cursor: pointer;" onclick="window.discordLogin()">
                       <i class="fab fa-discord"></i> Login with Discord
@@ -3480,17 +3479,14 @@ async function renderSettingsAppearance() {
                   <button id="btn-discord-logout" class="btn" style="background: var(--app-bg); color: var(--text-primary); padding: 12px 24px; border-radius: 8px; cursor: pointer; display: none;" onclick="window.discordLogout()">
                       <i class="fas fa-right-from-bracket"></i> Logout
                   </button>
-                  <label style="cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 14px;">
-                      <input type="checkbox" id="btn-discord-rpc" onchange="window.discordToggleRpc(this)">
-                      RPC Active
-                  </label>
-              </div>
 
-              <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px; font-size: 14px; color: var(--text-secondary);">
-                  <label style="cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 8px;">
-                      <input type="checkbox" id="btn-rpc-images" onchange="window.discordTogglePref('rpc_images', this)">
-                      Album art + logo
-                  </label>
+                  <div style="display: inline-flex; align-items: center; gap: 10px; margin-left: auto; user-select: none;">
+                      <span style="font-size: 14px; color: var(--text-secondary);">Rich Presence</span>
+                      <label class="m3-switch" title="Discord Rich Presence on / off">
+                          <input type="checkbox" id="btn-discord-rpc" onchange="window.discordToggleRpc(this)">
+                          <span class="m3-track"><span class="m3-knob"><i class="fab fa-discord"></i></span></span>
+                      </label>
+                  </div>
               </div>
 
               <details style="margin-top: 16px;">
@@ -3576,8 +3572,6 @@ async function renderSettingsAppearance() {
         window.discordRefreshState();
         const rpcBox = document.getElementById('btn-discord-rpc');
         if (rpcBox) rpcBox.checked = window.discordRpcEnabled;
-        const imgBox = document.getElementById('btn-rpc-images');
-        if (imgBox) imgBox.checked = window.rpcImages;
     }, 50);
 }
 

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onDoShrink: (cb) => ipcRenderer.on('do-shrink', (_e, ...args) => cb(...args)),
   onTrackUpdated: (cb) => ipcRenderer.on('track-updated', (_e, data) => cb(data)),
   sendAction: (action) => ipcRenderer.send('island-action', action),
+  setIslandState: (state) => ipcRenderer.send('island-state', state),
   closeApp: () => ipcRenderer.send('window-close'),
   minimizeApp: () => ipcRenderer.send('window-minimize'),
   toggleFullscreen: () => ipcRenderer.send('window-toggle-fullscreen'),

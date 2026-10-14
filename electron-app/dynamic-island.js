@@ -20,12 +20,19 @@ function formatTime(seconds) {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function applyState(name) {
+    container.className = 'island ' + name;
+    if (window.electronAPI.setIslandState) window.electronAPI.setIslandState(name);
+}
+
+applyState('hidden');
+
 function resetTimer() {
     if (hideTimeout) clearTimeout(hideTimeout);
     if (isExpanded) {
         hideTimeout = setTimeout(() => {
             window.electronAPI.shrinkIsland();
-            container.className = 'island minimized';
+            applyState('minimized');
             isExpanded = false;
         }, 5000);
     }
@@ -41,7 +48,7 @@ container.addEventListener('click', (e) => {
 });
 
 window.electronAPI.onDoExpand(() => {
-    container.className = 'island expanded';
+    applyState('expanded');
     isExpanded = true;
     resetTimer();
 });
@@ -49,7 +56,7 @@ window.electronAPI.onDoExpand(() => {
 window.electronAPI.onDoShrink(() => {
     if (isExpanded) {
         window.electronAPI.shrinkIsland();
-        container.className = 'island minimized';
+        applyState('minimized');
         isExpanded = false;
         if (hideTimeout) clearTimeout(hideTimeout);
     }
@@ -91,13 +98,12 @@ window.electronAPI.onTrackUpdated((data) => {
         playIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
         
         if (!isPlaying) {
-            // Hide the island completely if paused and we aren't interacting with it
-            if (!isExpanded) {
-                container.className = 'island hidden';
-            }
+            isExpanded = false;
+            if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+            applyState('hidden');
         } else {
             if (container.classList.contains('hidden')) {
-                container.className = 'island minimized';
+                applyState('minimized');
             }
         }
         return;

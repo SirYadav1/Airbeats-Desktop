@@ -353,6 +353,230 @@ const getHighestQualityImage = (images) => {
     return url;
 };
 
+window.__discordTrack = null;
+window.__discordStart = null;
+const RPC_PREF = 'discord_rpc_enabled';
+window.discordRpcEnabled = localStorage.getItem(RPC_PREF) !== 'false';
+
+
+window.discordToggleRpc = function(el) {
+    window.discordRpcEnabled = !!el.checked;
+    try { localStorage.setItem(RPC_PREF, el.checked ? 'true' : 'false'); } catch (e) {}
+    if (!el.checked && window.discordAPI && window.discordAPI.setActivity) {
+        window.discordAPI.setActivity({ details: '', state: '' });
+    } else {
+        window.syncDiscordActivity();
+    }
+};
+
+window.__discordSyncNow = function() {
+    if (!window.discordRpcEnabled) return;
+    if (!window.discordAPI || !window.discordAPI.setActivity) return;
+    const t = window.__discordTrack;
+    if (!t) {
+        window.discordAPI.setActivity({ details: '', state: '' });
+        return;
+    }
+    const playing = document.body.classList.contains('is-playing');
+    if (playing && !window.__discordStart) window.__discordStart = Date.now();
+    if (!playing) window.__discordStart = null;
+
+    let start = null, end = null;
+    if (playing) {
+        const el = document.getElementById('audioElement');
+        const dur = (el && isFinite(el.duration) && el.duration > 0)
+            ? el.duration
+            : (t.duration || 0);
+        const pos = (el && isFinite(el.currentTime)) ? el.currentTime : 0;
+        if (dur > 0) {
+            start = Date.now() - pos * 1000;
+            end = start + dur * 1000;
+        } else {
+            start = window.__discordStart;
+        }
+    }
+
+    window.discordAPI.setActivity({
+        details: t.name || '',
+        state: t.artists?.primary?.[0]?.name || '',
+        largeImage: getHighestQualityImage(t.image),
+        largeText: t.name,
+        smallImage: 'https://raw.githubusercontent.com/d0x-dev/Airbeats-Desktop/main/electron-app/icon.png',
+        smallText: 'AirBeats',
+        startTimestamp: start,
+        endTimestamp: end,
+        paused: !playing
+    });
+    if (window.dlog) {
+        window.dlog('sync playing=' + playing + ' t=' + (t.name || '')
+            + ' @' + ((new Error().stack || '').split('\n')[2] || '(?)'));
+    }
+};
+
+window.syncDiscordActivity = function() {
+    clearTimeout(window.__discordSyncTimer);
+    window.__discordSyncTimer = setTimeout(window.__discordSyncNow, 400);
+};
+
+window.discordLogin = function() {
+    if (!window.discordAPI) return;
+    window.discordSetStatus('Opening Discord login…');
+    window.discordAPI.login();
+};
+
+window.discordLogout = async function() {
+    if (!window.discordAPI) return;
+    await window.discordAPI.logout();
+    window.discordSetStatus('Logged out.');
+};
+
+window.discordPasteToken = async function() {
+    const input = document.getElementById('discord-token-input');
+    if (!input || !window.discordAPI) return;
+    const t = input.value.trim();
+    if (!t) return;
+    window.discordSetStatus('Checking token…');
+    try {
+        await window.discordAPI.setToken(t);
+        input.value = '';
+    } catch (e) {
+        window.discordSetStatus('Failed: ' + e.message, true);
+    }
+};
+
+window.discordDebugDump = function() {
+    if (!window.discordAPI || !window.discordAPI.dump) return;
+    window.discordSetStatus('Dumping login page storage...');
+    window.discordAPI.dump();
+};
+
+window.addEventListener('error', (e) => {
+    try { window.dlog('JS ERROR: ' + e.message + ' @ ' + e.filename + ':' + e.lineno); } catch (x) {}
+});
+window.addEventListener('unhandledrejection', (e) => {
+    try { window.dlog('UNHANDLED: ' + (e.reason && e.reason.message || e.reason)); } catch (x) {}
+});
+
+window.dlog = function(m) {
+    if (window.discordAPI && window.discordAPI.rlog) window.discordAPI.rlog(m);
+};
+
+window.discordSetStatus = function(text, isError) {
+    const box = document.getElementById('discord-status-box');
+    if (!box) return;
+    box.textContent = text || '';
+    box.style.color = isError ? '#ff6b6b' : 'var(--text-secondary)';
+};
+
+window.discordRefreshState = async function() {
+    window.dlog('refreshState: user=' + (window.__discordUser ? 'YES' : 'null')
+        + ' cache=' + (localStorage.getItem('discord_user') ? 'YES' : 'none'));
+    if (!window.__discordUser) {
+        try {
+            const raw = localStorage.getItem('discord_user');
+            if (raw) window.__discordUser = JSON.parse(raw);
+        } catch (e) {}
+        if (window.__discordUser) window.discordRenderState(true, window.__discordUser);
+    }
+    if (!window.discordAPI || !window.discordAPI.getState) return;
+    try {
+        const st = await window.discordAPI.getState();
+        window.dlog('getState -> ' + JSON.stringify(st));
+        if (st && st.ok) {
+            window.__discordUser = st.user;
+            try { localStorage.setItem('discord_user', JSON.stringify(st.user)); } catch (e) {}
+            window.discordRenderState(true, st.user);
+        } else {
+            window.dlog('getState NOT ok -> forcing logged-out UI');
+            window.__discordUser = null;
+            try { localStorage.removeItem('discord_user'); } catch (e) {}
+            window.discordRenderState(false);
+        }
+    } catch (e) {
+    }
+};
+
+window.__discordUiState = { loggedIn: false, user: null };
+
+window.discordApplyUiState = function() {
+    const st = window.__discordUiState;
+    if (!st) return;
+    document.querySelectorAll('#btn-discord-login').forEach((b) => {
+        b.style.display = st.loggedIn ? 'none' : '';
+    });
+    document.querySelectorAll('#btn-discord-logout').forEach((b) => {
+        b.style.display = st.loggedIn ? '' : 'none';
+    });
+    const box = document.getElementById('btn-discord-rpc');
+    if (box) box.checked = window.discordRpcEnabled;
+    if (st.loggedIn && st.user) {
+        const el = document.getElementById('discord-status-box');
+        if (el) el.textContent = 'Connected as ' + (st.user.name || st.user.username)
+            + ' (@"' + st.user.username + '")';
+    }
+};
+
+window.discordRenderState = function(loggedIn, user) {
+    window.__discordUiState = { loggedIn: !!loggedIn, user: user || null };
+    const _caller = (new Error().stack || '').split('\n').slice(2, 4).join(' <- ').replace(/\s+/g, ' ');
+    const _b = document.querySelector('#btn-discord-login');
+    window.dlog('renderState loggedIn=' + loggedIn
+        + ' loginBtns=' + document.querySelectorAll('#btn-discord-login').length
+        + ' logoutBtns=' + document.querySelectorAll('#btn-discord-logout').length
+        + ' loginDisplay=' + (_b ? getComputedStyle(_b).display : 'NO-ELEM')
+        + ' from ' + _caller);
+    document.querySelectorAll('#btn-discord-login').forEach((b) => {
+        b.style.display = loggedIn ? 'none' : '';
+    });
+    document.querySelectorAll('#btn-discord-logout').forEach((b) => {
+        b.style.display = loggedIn ? '' : 'none';
+    });
+    window.discordSetStatus(loggedIn && user
+        ? 'Connected as ' + (user.name || user.username) + ' (@"' + user.username + '")'
+        : '');
+    window.discordApplyUiState();
+};
+
+(function () {
+    let t = null;
+    const kick = () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+            if (document.getElementById('btn-discord-login')
+                || document.getElementById('btn-discord-rpc')) {
+                window.discordApplyUiState();
+            }
+        }, 20);
+    };
+    const start = () => {
+        if (!document.body) return;
+        new MutationObserver(kick).observe(document.body, { childList: true, subtree: true });
+    };
+    if (document.body) start();
+    else document.addEventListener('DOMContentLoaded', start);
+})();
+
+if (window.discordAPI && window.discordAPI.onStatus) {
+    window.discordAPI.onStatus((data) => {
+        if (!data) return;
+        if (data.ok) {
+            window.__discordUser = data.user || null;
+            try {
+                if (data.user) localStorage.setItem('discord_user', JSON.stringify(data.user));
+                else localStorage.removeItem('discord_user');
+            } catch (e) {}
+            window.discordRenderState(true, data.user);
+            window.syncDiscordActivity();
+        } else if (data.loggedOut) {
+            window.__discordUser = null;
+            try { localStorage.removeItem('discord_user'); } catch (e) {}
+            window.discordRenderState(false);
+        } else {
+            window.discordSetStatus(data.error || 'Login failed.', true);
+        }
+    });
+}
+
 // ==========================================
     
 // ==========================================
@@ -1931,6 +2155,10 @@ async function loadCurrentTrack() {
     if (window.updateAodTrackInfo) window.updateAodTrackInfo();
     if (window.updateSheetTrackInfo) window.updateSheetTrackInfo();
 
+    window.__discordTrack = track;
+    window.__discordStart = Date.now();
+    window.syncDiscordActivity();
+
     // Right panel UI
     const rpTitle = document.getElementById('rightPanelTitle');
     const rpArtist = document.getElementById('rightPanelArtist');
@@ -2081,6 +2309,7 @@ audio.addEventListener('play', () => {
     if (window.electronAPI && window.electronAPI.updateDynamicIsland) {
         window.electronAPI.updateDynamicIsland({ type: 'state', state: 'play' });
     }
+    window.syncDiscordActivity();
     if (window.updateAodPlaybackState) window.updateAodPlaybackState();
 });
 
@@ -2090,7 +2319,12 @@ audio.addEventListener('pause', () => {
     if (window.electronAPI && window.electronAPI.updateDynamicIsland) {
         window.electronAPI.updateDynamicIsland({ type: 'state', state: 'pause' });
     }
+    window.syncDiscordActivity();
     if (window.updateAodPlaybackState) window.updateAodPlaybackState();
+});
+
+audio.addEventListener('seeked', () => {
+    window.syncDiscordActivity();
 });
 
 playPauseBtn.addEventListener('click', () => {
@@ -2166,6 +2400,7 @@ audio.addEventListener('loadedmetadata', () => {
             localStorage.setItem('playHistory', JSON.stringify(history));
         }
     }
+    window.syncDiscordActivity();
 });
 
 audio.addEventListener('timeupdate', () => {
@@ -3218,6 +3453,55 @@ async function renderSettingsAppearance() {
           </div>
 
           <div style="background: var(--search-bg); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
+              <h3 style="margin-top: 0; font-size: 20px;"><i class="fab fa-discord" style="color: #5865F2;"></i> Discord Rich Presence</h3>
+              <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                  Show what you're listening to on your Discord profile. You log in here, inside AirBeats — the Discord desktop app is not needed.
+              </p>
+
+              <div id="discord-status-box" style="margin-bottom: 16px; font-size: 14px; color: var(--text-secondary);"></div>
+
+              <style>
+                  .m3-switch{position:relative;display:inline-flex;align-items:center;width:52px;height:32px;flex:none;cursor:pointer}
+                  .m3-switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+                  .m3-track{position:absolute;inset:0;border-radius:16px;background:#9e9e9e;transition:background .2s ease}
+                  .m3-knob{position:absolute;top:8px;left:8px;width:16px;height:16px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .22s cubic-bezier(.2,0,0,1),top .22s cubic-bezier(.2,0,0,1),width .22s cubic-bezier(.2,0,0,1),height .22s cubic-bezier(.2,0,0,1),font-size .22s ease}
+                  .m3-knob i{line-height:1}
+                  .m3-switch:hover .m3-track{background:#868686}
+                  .m3-switch input:checked ~ .m3-track{background:var(--accent)}
+                  .m3-switch input:checked:hover ~ .m3-track{filter:brightness(1.08)}
+                  .m3-switch input:checked ~ .m3-track .m3-knob{top:4px;left:24px;width:24px;height:24px;font-size:13px}
+              </style>
+
+              <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
+                  <button id="btn-discord-login" class="btn" style="background: #5865F2; color: #fff; padding: 12px 24px; border-radius: 8px; cursor: pointer;" onclick="window.discordLogin()">
+                      <i class="fab fa-discord"></i> Login with Discord
+                  </button>
+                  <button id="btn-discord-logout" class="btn" style="background: var(--app-bg); color: var(--text-primary); padding: 12px 24px; border-radius: 8px; cursor: pointer; display: none;" onclick="window.discordLogout()">
+                      <i class="fas fa-right-from-bracket"></i> Logout
+                  </button>
+
+                  <div style="display: inline-flex; align-items: center; gap: 10px; margin-left: auto; user-select: none;">
+                      <span style="font-size: 14px; color: var(--text-secondary);">Rich Presence</span>
+                      <label class="m3-switch" title="Discord Rich Presence on / off">
+                          <input type="checkbox" id="btn-discord-rpc" onchange="window.discordToggleRpc(this)">
+                          <span class="m3-track"><span class="m3-knob"><i class="fab fa-discord"></i></span></span>
+                      </label>
+                  </div>
+              </div>
+
+              <details style="margin-top: 16px;">
+                  <summary style="cursor: pointer; color: var(--text-secondary); font-size: 13px;">Login not working? Paste your token manually</summary>
+                  <div style="display: flex; gap: 10px; margin-top: 12px;">
+                      <input id="discord-token-input" type="password" placeholder="Discord token" style="flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--text-secondary); background: var(--app-bg); color: var(--text-primary);">
+                      <button class="btn" style="background: #5865F2; color: #fff; padding: 10px 18px; border-radius: 8px; cursor: pointer;" onclick="window.discordPasteToken()">Save</button>
+                  </div>
+                  <button class="btn" style="background: var(--app-bg); color: var(--text-primary); padding: 8px 14px; border-radius: 6px; cursor: pointer; margin-top: 10px; font-size: 12px;" onclick="window.discordDebugDump()">
+                      <i class="fas fa-bug"></i> Debug: dump login page storage
+                  </button>
+              </details>
+          </div>
+
+          <div style="background: var(--search-bg); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
               <h3 style="margin-top: 0; font-size: 20px;"><i class="fas fa-users" style="color: #1DB954;"></i> Listen Together</h3>
               <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Sync your playback across devices or listen with friends in real-time. This connects with the Android App users.</p>
               
@@ -3283,6 +3567,11 @@ async function renderSettingsAppearance() {
         window.setTheme(localStorage.getItem('theme') || 'light');
         window.setWaveformAnimation(localStorage.getItem('wave_anim') === 'true');
         window.setDynamicIsland(localStorage.getItem('dynamic_island_enabled') === 'true');
+        window.dlog('settings/appearance mounted');
+        window.discordRenderState(!!window.__discordUser, window.__discordUser);
+        window.discordRefreshState();
+        const rpcBox = document.getElementById('btn-discord-rpc');
+        if (rpcBox) rpcBox.checked = window.discordRpcEnabled;
     }, 50);
 }
 
@@ -3981,7 +4270,7 @@ setTimeout(() => {
         currentY = y;
         const diff = currentY - startY;
         if (diff > 0 && scrollContainer.scrollTop === 0) {
-            ptrIndicator.style.transform = 	ranslateY( + Math.min(diff - 60, 0) + px);
+            ptrIndicator.style.transform = 'translateY(' + Math.min(diff - 60, 0) + 'px)';
             ptrIndicator.style.opacity = Math.min(diff / 60, 1);
             if (diff > 60) ptrIndicator.classList.add('ptr-refreshing');
             else ptrIndicator.classList.remove('ptr-refreshing');

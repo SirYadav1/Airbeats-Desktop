@@ -1,3 +1,37 @@
+const dLogFs = require('fs');
+const dLogPath = require('path');
+const dLogDir = dLogPath.join(require('electron').app.getPath('userData'), 'logs');
+const dLogFile = dLogPath.join(dLogDir, 'main-' + new Date().toISOString().slice(0, 10) + '.log');
+function dLogWrite(line) {
+    try {
+        if (!dLogFs.existsSync(dLogDir)) dLogFs.mkdirSync(dLogDir, { recursive: true });
+        if (dLogFs.existsSync(dLogFile) && dLogFs.statSync(dLogFile).size > 5 * 1024 * 1024) {
+            dLogFs.renameSync(dLogFile, dLogFile + '.1');
+        }
+        dLogFs.appendFileSync(dLogFile, line + '\n', 'utf8');
+    } catch (e) { }
+}
+const dLogTs = () => new Date().toISOString();
+function dLogFmt(args) {
+    if (!args || typeof args.map !== 'function') args = [args];
+    return args.map((a) => {
+        if (typeof a === 'string') return a;
+        if (a instanceof Error) return a.stack || a.message;
+        try { return JSON.stringify(a); } catch (e) { return String(a); }
+    }).join(' ');
+}
+['log', 'info', 'warn', 'error'].forEach((m) => {
+    const orig = console[m] ? console[m].bind(console) : null;
+    console[m] = function () {
+        dLogWrite(dLogTs() + ' [' + m + '] ' + dLogFmt(Array.from(arguments)));
+        if (orig) orig.apply(console, arguments);
+    };
+});
+process.on('uncaughtException', (e) => dLogWrite(dLogTs() + ' [fatal] uncaughtException ' + (e && e.stack || e)));
+process.on('unhandledRejection', (e) => dLogWrite(dLogTs() + ' [fatal] unhandledRejection ' + (e && e.stack || e)));
+dLogWrite(dLogTs() + ' [boot] ==== AirBeats started (pid ' + process.pid + ') ====');
+console.log('[log] file -> ' + dLogFile);
+
 const a0_0x5e1154=a0_0x404f;function a0_0x404f(_0x351342,_0x17e364){_0x351342=_0x351342-0x6b;const _0x28fe9c=a0_0x28fe();let _0x404fd4=_0x28fe9c[_0x351342];return _0x404fd4;}(function(_0x18a4ea,_0x524053){const _0x44e5e2=a0_0x404f,_0x5800a7=_0x18a4ea();while(!![]){try{const _0x57c26b=parseInt(_0x44e5e2(0x70))/0x1+parseInt(_0x44e5e2(0xa0))/0x2+-parseInt(_0x44e5e2(0xac))/0x3+parseInt(_0x44e5e2(0xa8))/0x4+parseInt(_0x44e5e2(0xaa))/0x5+-parseInt(_0x44e5e2(0x8b))/0x6*(parseInt(_0x44e5e2(0x7b))/0x7)+-parseInt(_0x44e5e2(0x7f))/0x8;if(_0x57c26b===_0x524053)break;else _0x5800a7['push'](_0x5800a7['shift']());}catch(_0x4a1231){_0x5800a7['push'](_0x5800a7['shift']());}}}(a0_0x28fe,0xdc3b0));const {app,BrowserWindow,ipcMain,shell}=require(a0_0x5e1154(0x6b)),path=require(a0_0x5e1154(0xa3)),{spawn}=require(a0_0x5e1154(0xaf)),http=require(a0_0x5e1154(0xa4));let mainWindow,dynamicIslandWindow=null,serverProcess;
 // last island payload, replayed on did-finish-load (the island window is
 // created async, so the first update used to arrive before it existed)
@@ -22,3 +56,380 @@ ipcMain2.on('download-req', async (e, { url, filename }) => {
         win.webContents.downloadURL(url);
     }
 });
+
+const { ipcMain: dIpc, BrowserWindow: dWin } = require('electron');
+const dFs = require('fs');
+const { DiscordRpc } = require('./discord-rpc');
+
+function dAppId() {
+    try {
+        const f = dLogPath.join(app.getPath('userData'), 'discord.json');
+        const j = JSON.parse(dFs.readFileSync(f, 'utf8'));
+        if (j.applicationId) return String(j.applicationId).trim();
+    } catch (err) { }
+    return (process.env.DISCORD_APPLICATION_ID || '').trim();
+}
+const dRpc = new DiscordRpc(dAppId());
+let dToken = null;
+let dUserInfo = null;
+let dLoginWin = null;
+let dPoll = null;
+
+const dStoreFile = () => require('path').join(app.getPath('userData'), 'discord.json');
+
+function dLoadToken() {
+    try { return JSON.parse(dFs.readFileSync(dStoreFile(), 'utf8')).token || null; }
+    catch (e) { return null; }
+}
+function dSaveToken(t) {
+    try {
+        let cur = {};
+        try { cur = JSON.parse(dFs.readFileSync(dStoreFile(), 'utf8')); } catch (err) { }
+        dFs.writeFileSync(dStoreFile(), JSON.stringify({ ...cur, token: t }), 'utf8');
+    }
+    catch (e) { console.log('[discord] save failed', e.message); }
+}
+
+const D_EXTRACT = `(async function(){
+  function clean(t){ return (t==null?'':String(t)).trim().replace(/^[\x22\x27]|[\x22\x27]$/g,''); }
+  function looks(t){ return /^(mfa\.)?[\w-]{20,}\.[\w-]{6,}\.[\w-]{20,}$/.test(t); }
+  try { if (window.__airbeatsDiscordToken) return window.__airbeatsDiscordToken; } catch(e){}
+  try {
+    var ls = window.localStorage;
+    for (var i = 0; i < ls.length; i++) { var v = clean(ls.getItem(i)); if (looks(v)) return v; }
+  } catch(e){}
+  return '';
+})()`;
+
+function dNotifyMain(payload) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('discord-status', payload);
+    }
+}
+
+async function dUseToken(token) {
+    dToken = token;
+    dSaveToken(token);
+    try {
+        const info = await dRpc.getUserInfo(token);
+        dUserInfo = info;
+        dRpc.connect(token);
+        dNotifyMain({ ok: true, user: info, tokenSaved: true });
+        return info;
+    } catch (e) {
+        dToken = null;
+        dRpc.disconnect();
+        dNotifyMain({ ok: false, error: e.message });
+        throw e;
+    }
+}
+
+function dCreateLoginWindow() {
+    if (dLoginWin && !dLoginWin.isDestroyed()) { dLoginWin.focus(); return; }
+    dLoginWin = new dWin({
+        width: 900, height: 760, autoHideMenuBar: true,
+        webPreferences: {
+            contextIsolation: false, nodeIntegration: false,
+            sandbox: false,
+            partition: 'persist:discord', devTools: false,
+            preload: require('path').join(__dirname, 'discord-login-preload.js')
+        }
+    });
+    dLoginWin.on('closed', () => { dLoginWin = null; clearInterval(dPoll); dPoll = null; });
+    dLoginWin.loadURL('https://discord.com/login');
+
+    let tried = false;
+    const attempt = async () => {
+        if (tried || !dLoginWin || dLoginWin.isDestroyed()) return;
+        const url = dLoginWin.webContents.getURL();
+        if (!/discord\.com\/(app|channels)/.test(url)) return;
+        tried = true;
+        try {
+            const t = await dLoginWin.webContents.executeJavaScript(D_EXTRACT, true);
+            if (t && t.length > 30) {
+                await dUseToken(t);
+                dLoginWin.close();
+            } else {
+                tried = false;
+                dNotifyMain({ ok: false, error: 'Token not found. Paste it using the option below.' });
+            }
+        } catch (e) {
+            tried = false;
+            dNotifyMain({ ok: false, error: 'Login failed: ' + e.message });
+        }
+    };
+    dLoginWin.webContents.on('did-navigate', () => setTimeout(attempt, 2500));
+    dLoginWin.webContents.on('did-navigate-in-page', () => setTimeout(attempt, 2500));
+    dLoginWin.webContents.on('did-finish-load', () => setTimeout(attempt, 4000));
+
+    if (dPoll) clearInterval(dPoll);
+    dPoll = setInterval(async () => {
+        if (!dLoginWin || dLoginWin.isDestroyed()) { clearInterval(dPoll); dPoll = null; return; }
+        const url = dLoginWin.webContents.getURL();
+        if (!/discord\.com\/(app|channels)/.test(url)) return;
+        try {
+            const t = await dLoginWin.webContents.executeJavaScript('window.__airbeatsDiscordToken || ""', true);
+            if (t && t.length > 30) {
+                clearInterval(dPoll); dPoll = null;
+                await dUseToken(t);
+                dLoginWin.close();
+            }
+        } catch (e) { }
+    }, 1000);
+}
+
+const D_DUMP = `(async function(){
+  var out = [];
+  out.push('URL: ' + location.href);
+  try {
+    var ls = window.localStorage;
+    out.push('--- localStorage (' + ls.length + ' keys) ---');
+    for (var i = 0; i < ls.length; i++) {
+      var k = ls.key(i), v = String(ls.getItem(k) || '');
+      out.push('  [' + k + '] len=' + v.length + ' :: ' + v.slice(0, 80));
+    }
+  } catch(e) { out.push('localStorage ERR ' + e.message); }
+  try {
+    var dbs = await indexedDB.databases();
+    out.push('--- IndexedDB (' + dbs.length + ' dbs) ---');
+    for (var d = 0; d < dbs.length; d++) {
+      var name = dbs[d].name;
+      out.push(' DB: ' + name);
+      await new Promise(function(res){
+        var rq = indexedDB.open(name);
+        rq.onerror = function(){ out.push('   (open failed)'); res(); };
+        rq.onsuccess = function(){
+          var db = rq.result;
+          var stores = Array.prototype.slice.call(db.objectStoreNames);
+          out.push('   stores: ' + stores.join(', '));
+          var pending = stores.length;
+          if (!pending) return res();
+          stores.forEach(function(sn){
+            try {
+              var cur = db.transaction(sn,'readonly').objectStore(sn).openCursor();
+              var n = 0;
+              cur.onsuccess = function(){
+                var row = cur.result;
+                if (!row || n >= 12) { if (--pending === 0) res(); return; }
+                var v = '';
+                try { v = typeof row.value === 'string' ? row.value : JSON.stringify(row.value); } catch(e){ v = '[unreadable]'; }
+                out.push('     ' + sn + ' / ' + row.key + ' :: ' + String(v).slice(0,120));
+                n++; row.continue();
+              };
+              cur.onerror = function(){ if (--pending === 0) res(); };
+            } catch(e) { out.push('     ' + sn + ' ERR ' + e.message); if (--pending === 0) res(); }
+          });
+        };
+      });
+    }
+  } catch(e) { out.push('IndexedDB ERR ' + e.message); }
+  return out.join(String.fromCharCode(10));
+})()`;
+
+dIpc.on('discord-login-dump', async () => {
+    if (!dLoginWin || dLoginWin.isDestroyed()) return;
+    try {
+        const dump = await dLoginWin.webContents.executeJavaScript(D_DUMP, true);
+        require('fs').writeFileSync('/tmp/discord-debug.txt', dump, 'utf8');
+        console.log('[discord] dump written');
+        dNotifyMain({ ok: false, error: 'Debug dump saved to /tmp/discord-debug.txt' });
+    } catch (e) {
+        console.log('[discord] dump failed', e.message);
+        dNotifyMain({ ok: false, error: 'Dump failed: ' + e.message });
+    }
+});
+
+dIpc.handle('discord-get-state', async () => {
+    console.log('[discord] getState asked, token=' + !!dToken);
+    if (!dToken) return { ok: false };
+    try {
+        if (!dUserInfo) dUserInfo = await dRpc.getUserInfo(dToken);
+        return { ok: true, user: dUserInfo };
+    } catch (e) {
+        dToken = null;
+        dRpc.disconnect();
+        return { ok: false, error: e.message };
+    }
+});
+
+dIpc.on('discord-log', (e, msg) => console.log('[renderer] ' + msg));
+
+let dQuitting = false;
+function dFlushPresence(done) {
+    try {
+        if (dRpc && dRpc.connected) {
+            dRpc.clearActivity();
+            setTimeout(() => { try { dRpc.disconnect(); } catch (e) {} done(); }, 400);
+            return;
+        }
+    } catch (e) { }
+    setTimeout(done, 0);
+}
+app.on('before-quit', (e) => {
+    if (dQuitting) return;
+    dQuitting = true;
+    e.preventDefault();
+    dFlushPresence(() => app.quit());
+});
+app.on('window-all-closed', () => {
+    dFlushPresence(() => { app.quit(); });
+});
+
+dIpc.on('discord-login-open', () => dCreateLoginWindow());
+dIpc.handle('discord-token-paste', async (e, token) => {
+    const t = String(token || '').trim().replace(/^["']|["']$/g, '');
+    if (t.length < 30) throw new Error('Token is too short');
+    return await dUseToken(t);
+});
+dIpc.handle('discord-logout', async () => {
+    dRpc.clearActivity();
+    dRpc.disconnect();
+    dToken = null;
+    try { dFs.unlinkSync(dStoreFile()); } catch (err) { }
+    dNotifyMain({ ok: false, loggedOut: true });
+    return true;
+});
+dIpc.on('island-state', (e, state) => {
+    if (!dynamicIslandWindow || dynamicIslandWindow.isDestroyed()) return;
+    try {
+        dynamicIslandWindow.setIgnoreMouseEvents(state === 'hidden');
+    } catch (err) { }
+});
+
+dIpc.on('discord-activity', (e, data) => {
+    if (!dToken) { console.log('[discord] activity dropped, no token'); return; }
+    console.log('[discord] activity details=' + JSON.stringify((data||{}).details)
+        + ' connected=' + dRpc.connected);
+    dRpc.setActivity(data || {}).then((ok) => console.log('[discord] setActivity -> ' + ok))
+        .catch((err) => console.log('[discord] activity err ' + err.message));
+});
+
+try {
+    const saved = dLoadToken();
+    if (saved) {
+        dToken = saved;
+        dRpc.getUserInfo(saved)
+            .then((info) => { dRpc.connect(saved); dNotifyMain({ ok: true, user: info, tokenSaved: true }); })
+            .catch((err) => { console.log('[discord] resume failed', err.message); dToken = null; });
+    }
+} catch (e) { }
+
+
+const { URLSearchParams } = require('url');
+
+const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || 'http://127.0.0.1:4173/callback';
+
+function _readEnvFile(key) {
+    try {
+        const fs = require('fs');
+        const file = require('path').join(__dirname, '.env');
+        if (!fs.existsSync(file)) return null;
+        for (const line of fs.readFileSync(file, 'utf-8').split('\n')) {
+            const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+            if (m && m[1] === key) return m[2].replace(/^["']|["']$/g, '');
+        }
+    } catch (e) { }
+    return null;
+}
+
+function getDiscordConfig() {
+    return {
+        client_id: process.env.DISCORD_CLIENT_ID || _readEnvFile('DISCORD_CLIENT_ID'),
+        client_secret: process.env.DISCORD_CLIENT_SECRET || _readEnvFile('DISCORD_CLIENT_SECRET'),
+    };
+}
+
+async function exchangeCode(code) {
+    const { client_id, client_secret } = getDiscordConfig();
+    if (!client_id || !client_secret) {
+        throw new Error('Discord OAuth2 not configured. Set DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET in .env or env.');
+    }
+    const r = await fetch('https://discord.com/api/v10/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            client_id,
+            client_secret,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: DISCORD_REDIRECT_URI,
+        }).toString(),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+        const msg = j.error_description || j.error || `HTTP ${r.status}`;
+        throw new Error(`Discord token exchange failed: ${msg}`);
+    }
+    return j;
+}
+
+let loginServer = null;
+let loginResolve = null;
+let loginReject = null;
+
+function startOAuth(webContents) {
+    return new Promise((resolve, reject) => {
+        loginResolve = resolve;
+        loginReject = reject;
+        let server;
+        const onListen = () => {
+            const port = server.address().port;
+            const oauthUrl = `https://discord.com/oauth2/authorize?${new URLSearchParams({
+                client_id: getDiscordConfig().client_id,
+                redirect_uri: DISCORD_REDIRECT_URI,
+                response_type: 'code',
+                scope: 'identify rpc.activities.write',
+            }).toString()}`;
+            webContents.send('discord-login-opened', { url: oauthUrl, port });
+        };
+        server = http.createServer((req, res) => {
+            try {
+                const url = new URL(req.url, `http://127.0.0.1:${req.socket.localPort}`);
+                if (url.pathname === '/callback') {
+                    const code = url.searchParams.get('code');
+                    if (code) {
+                        exchangeCode(code).then(({ access_token }) => {
+                            
+                            server.close();
+                            resolve(access_token);
+                        }).catch((err) => {
+                            server.close();
+                            reject(err);
+                        });
+                    } else {
+                        res.writeHead(400).end('No code');
+                    }
+                } else {
+                    res.writeHead(404).end('Not found');
+                }
+            } catch (e) {
+                res.writeHead(500).end(e.message);
+            }
+        });
+        server.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                server.close();
+                startOAuth(webContents).then(resolve).catch(reject);
+            } else {
+                reject(err);
+            }
+        });
+        server.listen(4173, '127.0.0.1', onListen);
+    });
+}
+
+dIpc.handle('discord-login-start', async (e) => {
+    const tok = await startOAuth(e.sender);
+    await dUseToken(tok);
+    return tok;
+});
+
+dIpc.handle('discord-login-callback', async (e, code) => {
+    const tok = await exchangeCode(code);
+    await dUseToken(tok);
+    return tok;
+
+
+});
+
+

@@ -3,3 +3,19 @@ const { ipcRenderer: ipcRenderer2, contextBridge: contextBridge2 } = require('el
 contextBridge2.exposeInMainWorld('electronDL', {
     downloadFile: (url, filename) => ipcRenderer2.send('download-req', { url, filename })
 });
+
+const { ipcRenderer: dIpcR, contextBridge: dCB } = require('electron');
+dCB.exposeInMainWorld('discordAPI', {
+    login: () => dIpcR.send('discord-login-open'),
+    oauthLogin: () => dIpcR.invoke('discord-login-start'),
+    _onLoginOpened: (cb) => dIpcR.on('discord-login-opened', (_e, d) => cb(d)),
+    _onCallback: (code) => dIpcR.invoke('discord-login-callback', code),
+    setToken: (t) => dIpcR.invoke('discord-token-paste', t),
+    logout: () => dIpcR.invoke('discord-logout'),
+    setActivity: (d) => dIpcR.send('discord-activity', d),
+    onStatus: (cb) => dIpcR.on('discord-status', (_e, data) => cb(data)),
+    getState: () => dIpcR.invoke('discord-get-state'),
+    dump: () => dIpcR.send('discord-login-dump'),
+    rlog: (m) => dIpcR.send('discord-log', String(m)),
+});
+dIpcR.on('discord-dump-request', () => {});

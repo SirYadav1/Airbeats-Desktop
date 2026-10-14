@@ -1,6 +1,7 @@
 
 const GATEWAY = 'wss://gateway.discord.gg/?v=10&encoding=json';
 const APPLICATION_ID = (process.env.DISCORD_APPLICATION_ID || '').trim();
+const SEND_GAP_MS = 700;
 const API = 'https://discord.com/api/v9';
 
 class DiscordRpc {
@@ -14,6 +15,13 @@ class DiscordRpc {
     this.hbTimer = null;
     this.connected = false;
     this._imgCache = this._loadImageCache();
+    this._imgFail = {};
+    this._imgInflight = {};
+    this._uploadChain = Promise.resolve();
+    this._lastSendAt = 0;
+    this._pending = null;
+    this._sending = false;
+    this._dirty = false;
     this.log = (...a) => console.log('[discord-rpc]', ...a);
   }
 
@@ -43,31 +51,57 @@ class DiscordRpc {
     return { username: j.username, name: j.global_name || j.username, avatar: j.avatar };
   }
 
-  async resolveImage(url) {
+  _cachedImage(url) {
     if (!url || typeof url !== 'string') return null;
     if (url.startsWith('mp:')) return url;
     if (!/^https?:\/\//.test(url)) return null;
-    if (this._imgCache[url]) return this._imgCache[url];
+    return this._imgCache[url] || null;
+  }
+
+  async resolveImage(url) {
+    const hit = this._cachedImage(url);
+    if (hit) return hit;
+    if (!url || typeof url !== 'string' || !/^https?:\/\//.test(url)) return null;
     if (!this.token) return null;
-    try {
-      const r = await fetch(API + '/applications/' + this.applicationId + '/external-assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: this.token, 'User-Agent': 'Mozilla/5.0' },
-        body: JSON.stringify({ urls: [url] }),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!r.ok) { this.log('external-assets HTTP ' + r.status); return null; }
-      const j = await r.json();
-      const p = j && j[0] && j[0].external_asset_path;
-      if (!p) { this.log('external-assets empty response'); return null; }
-      const asset = 'mp:' + p;
-      this._imgCache[url] = asset;
-      this._saveImageCache();
-      return asset;
-    } catch (e) {
-      this.log('external-assets failed: ' + e.message);
-      return null;
-    }
+    if (this._imgFail[url] && Date.now() < this._imgFail[url]) return null;
+    if (this._imgInflight[url]) return this._imgInflight[url];
+
+    const run = async () => {
+      try {
+        const r = await fetch(API + '/applications/' + this.applicationId + '/external-assets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: this.token, 'User-Agent': 'Mozilla/5.0' },
+          body: JSON.stringify({ urls: [url] }),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!r.ok) {
+          const ra = parseInt(r.headers.get('retry-after') || '', 10);
+          const wait = r.status === 429 ? (ra > 0 ? ra : 15) : 10;
+          this._imgFail[url] = Date.now() + wait * 1000;
+          this.log('external-assets HTTP ' + r.status + ' -> cooldown ' + wait + 's');
+          return null;
+        }
+        const j = await r.json();
+        const p = j && j[0] && j[0].external_asset_path;
+        if (!p) { this.log('external-assets empty response'); return null; }
+        const asset = 'mp:' + p;
+        this._imgCache[url] = asset;
+        delete this._imgFail[url];
+        this._saveImageCache();
+        this.log('asset ok: ' + url.slice(0, 60) + ' -> ' + asset.slice(0, 30) + '...');
+        return asset;
+      } catch (e) {
+        this._imgFail[url] = Date.now() + 10000;
+        this.log('external-assets failed: ' + e.message);
+        return null;
+      }
+    };
+
+    const next = this._uploadChain.then(run, run);
+    this._uploadChain = next.then(() => {}, () => {});
+    this._imgInflight[url] = next;
+    next.then(() => { delete this._imgInflight[url]; }, () => { delete this._imgInflight[url]; });
+    return next;
   }
 
   connect(token) {
@@ -182,8 +216,11 @@ class DiscordRpc {
     try {
       do {
         this._dirty = false;
+        const wait = SEND_GAP_MS - (Date.now() - this._lastSendAt);
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
         ok = await this._sendActivity(this._pending);
-        if (this._dirty) await new Promise((r) => setTimeout(r, 700));
+        this._lastSendAt = Date.now();
+        if (this._dirty) await new Promise((r) => setTimeout(r, 150));
       } while (this._dirty);
     } finally {
       this._sending = false;
@@ -206,8 +243,24 @@ class DiscordRpc {
       return this.clearActivity();
     }
 
-    const largeImage = await this.resolveImage(a.largeImage);
-    const smallImage = await this.resolveImage(a.smallImage);
+    let largeImage = this._cachedImage(a.largeImage);
+    let smallImage = this._cachedImage(a.smallImage);
+    const needWarm = [];
+    if (a.largeImage && /^https?:/.test(String(a.largeImage)) && !largeImage) needWarm.push(a.largeImage);
+    if (a.smallImage && /^https?:/.test(String(a.smallImage)) && !smallImage) needWarm.push(a.smallImage);
+    if (needWarm.length) {
+      Promise.all(needWarm.map((u) => this.resolveImage(u)))
+        .then((res) => {
+          const got = res.filter(Boolean).length;
+          if (got && this._pending === a && this.connected) {
+            this.log('asset warm done -> re-send with images');
+            this.setActivity(a);
+          } else if (got) {
+            this.log('asset warm done, newer payload already pending');
+          }
+        })
+        .catch(() => {});
+    }
 
     const activity = {
       name: 'AirBeats',
@@ -244,6 +297,7 @@ class DiscordRpc {
   async clearActivity() {
     if (!this.token) return false;
     if (!this.connected) return false;
+    this.log('SEND clear presence (activities: [])');
     return this._send(3, { since: null, activities: [], status: 'online', afk: false });
   }
 

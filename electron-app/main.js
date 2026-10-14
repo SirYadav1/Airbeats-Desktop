@@ -271,7 +271,7 @@ app.on('before-quit', (e) => {
     dFlushPresence(() => app.quit());
 });
 app.on('window-all-closed', () => {
-    dFlushPresence(() => { });
+    dFlushPresence(() => { app.quit(); });
 });
 
 dIpc.on('discord-login-open', () => dCreateLoginWindow());

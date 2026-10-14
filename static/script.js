@@ -295,7 +295,7 @@ window.discordToggleRpc = function(el) {
     }
 };
 
-window.syncDiscordActivity = function() {
+window.__discordSyncNow = function() {
     if (!window.discordRpcEnabled) return;
     if (!window.discordAPI || !window.discordAPI.setActivity) return;
     const t = window.__discordTrack;
@@ -339,6 +339,11 @@ window.syncDiscordActivity = function() {
         window.dlog('sync imgs=' + window.rpcImages + ' playing=' + playing
             + ' t=' + (t.name || '') + ' @' + new Error().stack.split('\n')[2]);
     }
+};
+
+window.syncDiscordActivity = function() {
+    clearTimeout(window.__discordSyncTimer);
+    window.__discordSyncTimer = setTimeout(window.__discordSyncNow, 400);
 };
 
 window.discordLogin = function() {

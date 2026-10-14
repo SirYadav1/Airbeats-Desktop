@@ -1,0 +1,59 @@
+# Virtual Environments
+.venv/
+venv/
+venv_backup/
+env/
+ENV/
+
+# Python Cache & Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.spec
+
+# Build & Packaging Artifacts
+build/
+dist/
+dist_pyarmor/
+artifacts/
+*.egg-info/
+.eggs/
+
+# Electron & Node Dependencies / Builds
+node_modules/
+electron-app/node_modules/
+electron-app/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Sensitive Credentials
+.env
+*.env
+SNAPCRAFT_STORE_CREDENTIALS.txt
+*.exp
+port.txt
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Scratch & Temporary Automation Scripts
+fix_*.py
+inject_*.py
+clean_*.py
+patch_*.py
+update_*.py
+append_*.py
+secure_*.py
+test_*.py
+test_*.js
+cache_bust.py
+migrate_snapcraft.py
+cm.js
+cm2.js
+contextmenu.js

@@ -4270,7 +4270,7 @@ setTimeout(() => {
         currentY = y;
         const diff = currentY - startY;
         if (diff > 0 && scrollContainer.scrollTop === 0) {
-            ptrIndicator.style.transform = 	ranslateY( + Math.min(diff - 60, 0) + px);
+            ptrIndicator.style.transform = 'translateY(' + Math.min(diff - 60, 0) + 'px)';
             ptrIndicator.style.opacity = Math.min(diff / 60, 1);
             if (diff > 60) ptrIndicator.classList.add('ptr-refreshing');
             else ptrIndicator.classList.remove('ptr-refreshing');

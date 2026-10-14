@@ -63,7 +63,8 @@ const { DiscordRpc } = require('./discord-rpc');
 
 function dAppId() {
     try {
-        const j = JSON.parse(dFs.readFileSync(dStoreFile(), 'utf8'));
+        const f = dLogPath.join(app.getPath('userData'), 'discord.json');
+        const j = JSON.parse(dFs.readFileSync(f, 'utf8'));
         if (j.applicationId) return String(j.applicationId).trim();
     } catch (err) { }
     return (process.env.DISCORD_APPLICATION_ID || '').trim();

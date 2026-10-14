@@ -3463,13 +3463,13 @@ async function renderSettingsAppearance() {
               <style>
                   .m3-switch{position:relative;display:inline-flex;align-items:center;width:52px;height:32px;flex:none;cursor:pointer}
                   .m3-switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
-                  .m3-track{position:absolute;inset:0;border-radius:16px;background:var(--text-secondary);opacity:.32;transition:background .2s ease,opacity .2s ease}
-                  .m3-knob{position:absolute;top:8px;left:8px;width:16px;height:16px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0;transition:all .2s ease}
+                  .m3-track{position:absolute;inset:0;border-radius:16px;background:#9e9e9e;transition:background .2s ease}
+                  .m3-knob{position:absolute;top:8px;left:8px;width:16px;height:16px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .22s cubic-bezier(.2,0,0,1),top .22s cubic-bezier(.2,0,0,1),width .22s cubic-bezier(.2,0,0,1),height .22s cubic-bezier(.2,0,0,1),font-size .22s ease}
                   .m3-knob i{line-height:1}
-                  .m3-switch input:checked ~ .m3-track{background:var(--accent);opacity:1}
-                  .m3-switch input:checked ~ .m3-track .m3-knob{top:4px;left:4px;width:24px;height:24px;font-size:13px}
-                  .m3-switch:hover .m3-track{opacity:.42}
-                  .m3-switch input:checked:hover ~ .m3-track{opacity:.92}
+                  .m3-switch:hover .m3-track{background:#868686}
+                  .m3-switch input:checked ~ .m3-track{background:var(--accent)}
+                  .m3-switch input:checked:hover ~ .m3-track{filter:brightness(1.08)}
+                  .m3-switch input:checked ~ .m3-track .m3-knob{top:4px;left:24px;width:24px;height:24px;font-size:13px}
               </style>
 
               <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">

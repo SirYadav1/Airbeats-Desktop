@@ -124,6 +124,14 @@ async function dUseToken(token) {
     }
 }
 
+async function dClearDiscordSession() {
+    try {
+        const s = require('electron').session.fromPartition('persist:discord');
+        await s.clearStorageData({ origins: ['https://discord.com'] });
+        await s.clearCache();
+        return true;
+    } catch (err) { return false; }
+}
 function dCreateLoginWindow() {
     if (dLoginWin && !dLoginWin.isDestroyed()) { dLoginWin.focus(); return; }
     dLoginWin = new dWin({
@@ -136,7 +144,6 @@ function dCreateLoginWindow() {
         }
     });
     dLoginWin.on('closed', () => { dLoginWin = null; clearInterval(dPoll); dPoll = null; });
-    dLoginWin.loadURL('https://discord.com/login');
 
     let tried = false;
     const attempt = async () => {
@@ -176,6 +183,10 @@ function dCreateLoginWindow() {
             }
         } catch (e) { }
     }, 1000);
+
+    dClearDiscordSession().then(() => {
+        if (dLoginWin && !dLoginWin.isDestroyed()) dLoginWin.loadURL('https://discord.com/login');
+    });
 }
 
 const D_DUMP = `(async function(){
@@ -285,7 +296,16 @@ dIpc.handle('discord-logout', async () => {
     dRpc.clearActivity();
     dRpc.disconnect();
     dToken = null;
-    try { dFs.unlinkSync(dStoreFile()); } catch (err) { }
+    dUserInfo = null;
+    try {
+        let cur = {};
+        try { cur = JSON.parse(dFs.readFileSync(dStoreFile(), 'utf8')); } catch (err) { }
+        delete cur.token;
+        dFs.writeFileSync(dStoreFile(), JSON.stringify(cur), 'utf8');
+    } catch (err) { }
+    if (dLoginWin && !dLoginWin.isDestroyed()) { dLoginWin.close(); dLoginWin = null; }
+    clearInterval(dPoll); dPoll = null;
+    await dClearDiscordSession();
     dNotifyMain({ ok: false, loggedOut: true });
     return true;
 });

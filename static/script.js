@@ -445,13 +445,7 @@ window.__discordSyncNow = function() {
         }
     }
 
-    const rpcButtons = [{ label: 'Visit AirBeats', url: 'https://airbeats.org' }];
-    if (t.id) {
-        rpcButtons.unshift({
-            label: 'Listen on YouTube Music',
-            url: 'https://play.airbeats.org/song?id=' + encodeURIComponent(t.id)
-        });
-    }
+    const rpcButtons = window.discordTrackButtons(t);
     window.discordAPI.setActivity({
         details: t.name || '',
         state: t.artists?.primary?.[0]?.name || '',
@@ -470,10 +464,58 @@ window.__discordSyncNow = function() {
     }
 };
 
+window.discordTrackButtons = function (t) {
+    const list = [{ label: 'Visit AirBeats', url: 'https://airbeats.org' }];
+    if (t && t.id) {
+        list.unshift({
+            label: 'Listen on YouTube Music',
+            url: 'https://play.airbeats.org/song?id=' + encodeURIComponent(t.id)
+        });
+    }
+    return list;
+};
+
 window.syncDiscordActivity = function() {
     clearTimeout(window.__discordSyncTimer);
     window.__discordSyncTimer = setTimeout(window.__discordSyncNow, 400);
 };
+
+window.discordUpdatePreview = function() {
+    const box = document.getElementById('discord-preview');
+    if (!box) return;
+    const t = window.__discordTrack;
+    if (!t) {
+        box.style.display = 'none';
+        return;
+    }
+    box.style.display = '';
+    const art = document.getElementById('discord-preview-art');
+    if (art) art.src = getHighestQualityImage(t.image) || '';
+    const title = document.getElementById('discord-preview-title');
+    if (title) title.textContent = t.name || '';
+    const artist = document.getElementById('discord-preview-artist');
+    if (artist) artist.textContent = t.artists?.primary?.[0]?.name || '';
+    const el = document.getElementById('audioElement');
+    const dur = (el && isFinite(el.duration) && el.duration > 0) ? el.duration : (t.duration || 0);
+    const pos = (el && isFinite(el.currentTime)) ? el.currentTime : 0;
+    const bar = document.getElementById('discord-preview-bar');
+    if (bar) bar.style.width = dur > 0 ? Math.min(100, (pos / dur) * 100).toFixed(1) + '%' : '0%';
+    const fmt = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+    const elapsed = document.getElementById('discord-preview-elapsed');
+    if (elapsed) elapsed.textContent = fmt(pos);
+    const total = document.getElementById('discord-preview-total');
+    if (total) total.textContent = fmt(dur);
+    const wrap = document.getElementById('discord-preview-buttons');
+    if (wrap) {
+        wrap.innerHTML = window.discordTrackButtons(t)
+            .map((b) => `<span style="flex: 1; text-align: center; padding: 8px 10px; border-radius: 8px; background: var(--app-bg); font-size: 13px;">${b.label}</span>`)
+            .join('');
+    }
+};
+
+setInterval(() => {
+    if (document.getElementById('discord-preview')) window.discordUpdatePreview();
+}, 1000);
 
 window.discordLogin = function() {
     if (!window.discordAPI) return;
@@ -3579,6 +3621,24 @@ async function renderSettingsAppearance() {
                   </label>
               </div>
 
+              <div id="discord-preview" style="display: none; margin-top: 18px;">
+                  <div style="display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; background: var(--app-bg);">
+                      <img id="discord-preview-art" alt="" style="width: 56px; height: 56px; border-radius: 8px; object-fit: cover; flex: none;">
+                      <div style="flex: 1; min-width: 0;">
+                          <div id="discord-preview-title" style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                          <div id="discord-preview-artist" style="font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                          <div style="position: relative; height: 3px; margin-top: 9px; border-radius: 2px; background: rgba(128, 128, 128, 0.3);">
+                              <div id="discord-preview-bar" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; border-radius: 2px; background: var(--accent);"></div>
+                          </div>
+                          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                              <span id="discord-preview-elapsed">0:00</span>
+                              <span id="discord-preview-total">0:00</span>
+                          </div>
+                      </div>
+                  </div>
+                  <div id="discord-preview-buttons" style="display: flex; gap: 8px; margin-top: 8px;"></div>
+              </div>
+
               <details style="margin-top: 16px;">
                   <summary style="cursor: pointer; color: var(--text-secondary); font-size: 13px;">Login not working? Paste your token manually</summary>
                   <div style="display: flex; gap: 10px; margin-top: 12px;">
@@ -3664,6 +3724,7 @@ async function renderSettingsAppearance() {
         if (rpcBox) rpcBox.checked = window.discordRpcEnabled;
         const detBox = document.getElementById('btn-discord-details');
         if (detBox) detBox.checked = window.discordUseDetails;
+        window.discordUpdatePreview();
     }, 50);
 }
 

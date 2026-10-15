@@ -1,4 +1,5 @@
 from ytmusicapi import YTMusic
+from ytmusicapi.helpers import get_authorization, initialize_headers
 from yt_dlp import YoutubeDL
 import requests
 import os
@@ -7,7 +8,156 @@ import threading
 import time
 from flask import request, jsonify, redirect, send_file
 
+AIRBEATS_CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.config', 'airbeats')
+YT_AUTH_FILE = os.path.join(AIRBEATS_CONFIG_DIR, 'yt_auth.json')
+_yt_account_cache = None
+
+
+def yt_cookie_map(cookie):
+    parts = {}
+    for chunk in (cookie or '').split(';'):
+        if '=' not in chunk:
+            continue
+        key, value = chunk.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"')
+        if key and value and key not in parts:
+            parts[key] = value
+    return parts
+
+
+def yt_build_headers(cookie, authuser='0', visitor_data=''):
+    cookie = ' '.join((cookie or '').replace('\r', ' ').replace('\n', ' ').split())
+    parts = yt_cookie_map(cookie)
+    sapisid = parts.get('__Secure-3PAPISID') or parts.get('SAPISID')
+    if not sapisid:
+        raise ValueError('cookie is missing SAPISID')
+    headers = dict(initialize_headers())
+    headers.update({
+        'cookie': cookie,
+        'authorization': get_authorization(sapisid + ' https://music.youtube.com'),
+        'x-goog-authuser': str(authuser or '0'),
+        'origin': 'https://music.youtube.com',
+    })
+    visitor_data = str(visitor_data or '').strip()
+    if visitor_data:
+        headers['x-goog-visitor-id'] = visitor_data
+    return headers
+
+
+def yt_parse_auth_input(raw):
+    text = (raw or '').strip()
+    if not text:
+        raise ValueError('empty login input')
+    cookie = text
+    authuser = '0'
+    if '\n' in text or text[:7].lower() == 'cookie:':
+        for line in text.splitlines():
+            if ':' not in line:
+                continue
+            name, value = line.split(':', 1)
+            key = name.strip().lower()
+            value = value.strip()
+            if key == 'cookie' and value:
+                cookie = value
+            elif key == 'x-goog-authuser' and value:
+                authuser = value
+    return cookie, authuser
+
+
+def yt_make(auth_headers=None):
+    if not auth_headers:
+        return YTMusic()
+    clean = {k: v for k, v in auth_headers.items() if k != 'account' and isinstance(v, str)}
+    return YTMusic(clean)
+
+
+def yt_load_auth():
+    try:
+        with open(YT_AUTH_FILE, encoding='utf-8') as fh:
+            data = json.load(fh)
+        if isinstance(data, dict) and data.get('cookie'):
+            return data
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def yt_save_auth(data):
+    os.makedirs(AIRBEATS_CONFIG_DIR, exist_ok=True)
+    with open(YT_AUTH_FILE, 'w', encoding='utf-8') as fh:
+        json.dump(data, fh)
+    os.chmod(YT_AUTH_FILE, 0o600)
+
+
+def yt_apply_auth(auth_headers, instance=None):
+    global yt, _yt_auth, _yt_live, _yt_account_cache, _yt_error
+    _yt_auth = auth_headers
+    _yt_live = instance
+    _yt_error = ''
+    _yt_account_cache = None
+    if instance is not None:
+        yt = instance
+    elif not auth_headers:
+        yt = YTMusic()
+
+
+def yt_active():
+    global yt, _yt_live, _yt_error
+    if not _yt_auth:
+        return yt
+    if _yt_live is not None:
+        return _yt_live
+    with _yt_lock:
+        if _yt_live is not None:
+            return _yt_live
+        try:
+            _yt_live = yt_make(_yt_auth)
+            _yt_error = ''
+        except Exception as e:
+            _yt_error = str(e)
+            return yt
+        yt = _yt_live
+    return _yt_live
+
+
+def yt_warmup():
+    global _yt_account_cache
+    time.sleep(1)
+    try:
+        client = yt_active()
+    except Exception:
+        return
+    if not _yt_auth:
+        return
+    try:
+        info = client.get_account_info()
+    except Exception:
+        return
+    if _yt_account_cache is not None:
+        return
+    account = {
+        "name": info.get("accountName") or "YouTube Music",
+        "handle": info.get("channelHandle") or "",
+        "photo": info.get("accountPhotoUrl") or ""
+    }
+    _yt_account_cache = account
+    try:
+        saved = dict(_yt_auth)
+        saved["account"] = account
+        yt_save_auth(saved)
+    except OSError:
+        pass
+
+
+_yt_auth = yt_load_auth()
+_yt_live = None
+_yt_error = ''
+_yt_lock = threading.Lock()
+if _yt_auth and isinstance(_yt_auth.get('account'), dict):
+    _yt_account_cache = _yt_auth['account']
 yt = YTMusic()
+threading.Thread(target=yt_warmup, daemon=True).start()
 
 # Helper to format songs
 def format_song(song):
@@ -871,3 +1021,114 @@ def add_yt_routes(app, get_lyrics_fn):
         if os.path.exists(audio_path):
             return send_file(audio_path, mimetype='audio/mp4')
         return "Not found", 404
+
+    @app.route('/api/yt/status')
+    def api_yt_status():
+        global _yt_account_cache
+        if not _yt_auth:
+            return jsonify({"success": True, "data": {"loggedIn": False}})
+        if _yt_account_cache is None:
+            try:
+                info = yt_active().get_account_info()
+                _yt_account_cache = {
+                    "name": info.get("accountName") or "YouTube Music",
+                    "handle": info.get("channelHandle") or "",
+                    "photo": info.get("accountPhotoUrl") or ""
+                }
+                saved = dict(_yt_auth)
+                saved["account"] = _yt_account_cache
+                yt_save_auth(saved)
+            except Exception as e:
+                return jsonify({"success": True, "data": {"loggedIn": True, "name": "", "handle": "", "photo": "", "error": str(e)}})
+        data = {"loggedIn": True}
+        data.update(_yt_account_cache)
+        return jsonify({"success": True, "data": data})
+
+    @app.route('/api/yt/login', methods=['POST'])
+    def api_yt_login():
+        global _yt_account_cache
+        payload = request.get_json(silent=True) or {}
+        try:
+            cookie, authuser = yt_parse_auth_input(payload.get('input', ''))
+            headers = yt_build_headers(cookie, authuser, payload.get('visitorData', ''))
+            candidate = yt_make(headers)
+            info = candidate.get_account_info()
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e) or "login failed"})
+        account = {
+            "name": info.get("accountName") or "YouTube Music",
+            "handle": info.get("channelHandle") or "",
+            "photo": info.get("accountPhotoUrl") or ""
+        }
+        try:
+            fetched_visitor = candidate.base_headers.get("x-goog-visitor-id", "")
+        except Exception:
+            fetched_visitor = ""
+        if fetched_visitor and not headers.get("x-goog-visitor-id"):
+            headers["x-goog-visitor-id"] = fetched_visitor
+        saved = dict(headers)
+        saved["account"] = account
+        try:
+            yt_save_auth(saved)
+        except OSError as e:
+            return jsonify({"success": False, "error": str(e)})
+        yt_apply_auth(saved, candidate)
+        _yt_account_cache = account
+        return jsonify({"success": True, "data": account})
+
+    @app.route('/api/yt/logout', methods=['POST'])
+    def api_yt_logout():
+        yt_apply_auth(None)
+        try:
+            os.remove(YT_AUTH_FILE)
+        except OSError:
+            pass
+        return jsonify({"success": True})
+
+    @app.route('/api/library/playlists')
+    def api_library_playlists():
+        if not _yt_auth:
+            return jsonify({"success": False, "error": "not logged in"})
+        try:
+            items = yt_active().get_library_playlists(limit=50)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+        data = []
+        for item in items:
+            playlist = format_playlist(item)
+            count = item.get("count")
+            if count:
+                playlist["subtitle"] = f"{count} songs" if str(count).isdigit() else str(count)
+            data.append(playlist)
+        return jsonify({"success": True, "data": data})
+
+    @app.route('/api/library/liked')
+    def api_library_liked():
+        if not _yt_auth:
+            return jsonify({"success": False, "error": "not logged in"})
+        try:
+            liked = yt_active().get_liked_songs(limit=200)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+        tracks = liked.get("tracks", []) if isinstance(liked, dict) else []
+        return jsonify({"success": True, "data": [format_song(t) for t in tracks]})
+
+    @app.route('/api/library/subscriptions')
+    def api_library_subscriptions():
+        if not _yt_auth:
+            return jsonify({"success": False, "error": "not logged in"})
+        try:
+            items = yt_active().get_library_subscriptions(limit=100)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": True, "data": [format_artist(a) for a in items]})
+
+    @app.route('/api/library/albums')
+    def api_library_albums():
+        if not _yt_auth:
+            return jsonify({"success": False, "error": "not logged in"})
+        try:
+            items = yt_active().get_library_albums(limit=100)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)})
+        return jsonify({"success": True, "data": [format_album(a) for a in items]})

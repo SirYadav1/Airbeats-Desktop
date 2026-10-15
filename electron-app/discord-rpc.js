@@ -275,6 +275,10 @@ class DiscordRpc {
         .catch(() => {});
     }
 
+    const buttons = (Array.isArray(a.buttons) ? a.buttons : [])
+      .filter((b) => b && b.label && /^https?:\/\//.test(String(b.url)))
+      .slice(0, 2);
+
     const activity = {
       name: 'AirBeats',
       type: 2,
@@ -295,6 +299,12 @@ class DiscordRpc {
             small_text: a.smallText || undefined,
           }
         : undefined,
+      ...(buttons.length
+        ? {
+            buttons: buttons.map((b) => String(b.label).slice(0, 32)),
+            metadata: { button_urls: buttons.map((b) => String(b.url)) },
+          }
+        : {}),
     };
 
     const payload = {

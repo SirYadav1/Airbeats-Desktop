@@ -432,6 +432,13 @@ window.__discordSyncNow = function() {
         }
     }
 
+    const rpcButtons = [{ label: 'Visit AirBeats', url: 'https://airbeats.org' }];
+    if (t.id) {
+        rpcButtons.unshift({
+            label: 'Listen on YouTube Music',
+            url: 'https://play.airbeats.org/song?id=' + encodeURIComponent(t.id)
+        });
+    }
     window.discordAPI.setActivity({
         details: t.name || '',
         state: t.artists?.primary?.[0]?.name || '',
@@ -440,7 +447,8 @@ window.__discordSyncNow = function() {
         smallImage: 'https://raw.githubusercontent.com/d0x-dev/Airbeats-Desktop/main/electron-app/icon.png',
         smallText: 'AirBeats',
         startTimestamp: start,
-        endTimestamp: end
+        endTimestamp: end,
+        buttons: rpcButtons
     });
     if (window.dlog) {
         window.dlog('sync playing=' + playing + ' t=' + (t.name || '')

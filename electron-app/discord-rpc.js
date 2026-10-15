@@ -315,6 +315,7 @@ class DiscordRpc {
       type: 2,
       ...(this.applicationId ? { application_id: this.applicationId } : {}),
       ...(a.statusDisplayType ? { status_display_type: a.statusDisplayType } : {}),
+      ...(a.detailsUrl ? { details_url: String(a.detailsUrl) } : {}),
       state: a.state || null,
       details: a.details || null,
       timestamps: (a.startTimestamp || a.endTimestamp)

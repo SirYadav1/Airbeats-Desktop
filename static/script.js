@@ -448,14 +448,15 @@ window.__discordSyncNow = function() {
     const rpcButtons = window.discordTrackButtons(t);
     window.discordAPI.setActivity({
         details: t.name || '',
-        state: t.artists?.primary?.[0]?.name || '',
+        state: window.discordTrackArtists(t),
         largeImage: getHighestQualityImage(t.image),
-        largeText: t.name,
+        largeText: t.album?.name || t.name,
         smallImage: 'https://raw.githubusercontent.com/d0x-dev/Airbeats-Desktop/main/electron-app/icon.png',
         smallText: 'AirBeats',
         startTimestamp: start,
         endTimestamp: end,
         statusDisplayType: window.discordUseDetails ? 2 : 1,
+        detailsUrl: window.discordSongUrl(t) || undefined,
         buttons: rpcButtons
     });
     if (window.dlog) {
@@ -464,14 +465,20 @@ window.__discordSyncNow = function() {
     }
 };
 
+window.discordTrackArtists = function (t) {
+    const list = (t && t.artists && t.artists.primary) ? t.artists.primary : [];
+    const names = list.map((a) => a && a.name).filter(Boolean);
+    return names.length ? names.join(', ') : '';
+};
+
+window.discordSongUrl = function (t) {
+    return t && t.id ? 'https://play.airbeats.org/song?id=' + encodeURIComponent(t.id) : '';
+};
+
 window.discordTrackButtons = function (t) {
+    const songUrl = window.discordSongUrl(t);
     const list = [{ label: 'Visit AirBeats', url: 'https://airbeats.org' }];
-    if (t && t.id) {
-        list.unshift({
-            label: 'Listen on YouTube Music',
-            url: 'https://play.airbeats.org/song?id=' + encodeURIComponent(t.id)
-        });
-    }
+    if (songUrl) list.unshift({ label: 'Listen on YouTube Music', url: songUrl });
     return list;
 };
 
@@ -494,7 +501,7 @@ window.discordUpdatePreview = function() {
     const title = document.getElementById('discord-preview-title');
     if (title) title.textContent = t.name || '';
     const artist = document.getElementById('discord-preview-artist');
-    if (artist) artist.textContent = t.artists?.primary?.[0]?.name || '';
+    if (artist) artist.textContent = window.discordTrackArtists(t);
     const el = document.getElementById('audioElement');
     const dur = (el && isFinite(el.duration) && el.duration > 0) ? el.duration : (t.duration || 0);
     const pos = (el && isFinite(el.currentTime)) ? el.currentTime : 0;

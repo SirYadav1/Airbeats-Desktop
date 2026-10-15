@@ -524,6 +524,147 @@ setInterval(() => {
     if (document.getElementById('discord-preview')) window.discordUpdatePreview();
 }, 1000);
 
+window.ytAccount = null;
+window.ytAccountCardMode = 'full';
+
+window.ytAccountCardHtml = function() {
+    const state = window.ytAccount;
+    const compact = window.ytAccountCardMode === 'compact';
+    const photo = state && state.photo
+        ? `<img src="${state.photo}" referrerpolicy="no-referrer" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex: none;">`
+        : `<i class="fab fa-youtube" style="font-size: 30px; color: #FF0000; width: 48px; text-align: center; flex: none;"></i>`;
+    const name = state ? (state.name || 'YouTube Music') : 'Not signed in';
+    const subtitle = state ? (state.handle || 'Signed in') : 'Sign in to sync your library';
+    if (compact) {
+        return `
+            <div style="background: var(--search-bg); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
+                <h3 style="margin-top: 0; font-size: 20px;"><i class="fas fa-user-circle" style="color: var(--accent);"></i> Account</h3>
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    ${photo}
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 15px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${subtitle}</div>
+                    </div>
+                    <a href="#settings/account" class="btn" style="background: var(--app-bg); color: var(--text-primary); padding: 10px 18px; border-radius: 8px; text-decoration: none; flex: none;">Manage</a>
+                </div>
+            </div>
+        `;
+    }
+    return `
+        <div style="background: var(--search-bg); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
+            <h3 style="margin-top: 0; font-size: 20px;"><i class="fab fa-youtube" style="color: #FF0000;"></i> YouTube Music Account</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Sign in with your Google account to load your playlists, liked songs and subscriptions inside AirBeats.</p>
+            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 18px;">
+                ${photo}
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                    <div style="font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${subtitle}</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <button class="btn" style="background: #FF0000; color: #fff; padding: 10px 18px; border-radius: 8px; cursor: pointer;" onclick="window.ytOpenLogin()"><i class="fab fa-google"></i> ${state ? 'Switch Account' : 'Sign in with Google'}</button>
+                ${state ? `<button class="btn" style="background: var(--app-bg); color: var(--text-primary); padding: 10px 18px; border-radius: 8px; cursor: pointer;" onclick="window.ytLogout()"><i class="fas fa-right-from-bracket"></i> Sign out</button>` : ''}
+            </div>
+            <details style="margin-top: 16px;">
+                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 13px;">Login window not working? Paste cookies manually</summary>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">Open music.youtube.com in your browser and sign in. Then open DevTools &rarr; Network, click any request, and copy the <b>cookie</b> request header value here.</div>
+                <textarea id="yt-cookie-input" rows="3" placeholder="SID=...; HSID=...; SAPISID=..." style="width: 100%; margin-top: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--text-secondary); background: var(--app-bg); color: var(--text-primary); font-size: 12px; resize: vertical;"></textarea>
+                <button class="btn" style="background: var(--app-bg); color: var(--text-primary); padding: 8px 16px; border-radius: 8px; cursor: pointer; margin-top: 10px;" onclick="window.ytPasteLogin()">Save cookies</button>
+            </details>
+        </div>
+    `;
+};
+
+window.ytRefreshAccount = async function() {
+    try {
+        const res = await fetch('/api/yt/status');
+        const data = await res.json();
+        const info = (data && data.data) || {};
+        window.ytAccount = info.loggedIn ? info : null;
+    } catch (e) {
+        window.ytAccount = null;
+    }
+    const card = document.getElementById('yt-account-card');
+    if (card) card.innerHTML = window.ytAccountCardHtml();
+    return window.ytAccount;
+};
+
+window.ytOpenLogin = async function() {
+    if (!window.ytmusicAPI || !window.ytmusicAPI.openLogin) {
+        if (window.showToast) window.showToast('Login window unavailable');
+        return;
+    }
+    if (window.showToast) window.showToast('Opening YouTube Music sign-in...');
+    let result = null;
+    try {
+        result = await window.ytmusicAPI.openLogin();
+    } catch (e) { }
+    if (result && result.ok) {
+        if (window.showToast) window.showToast('Signed in to YouTube Music');
+    } else if (window.showToast) {
+        window.showToast('Not signed in');
+    }
+    await window.ytRefreshAccount();
+    if (window.location.hash.indexOf('yt-library') >= 0 && window.renderYtLibrary) window.renderYtLibrary();
+};
+
+window.ytPasteLogin = async function() {
+    const input = document.getElementById('yt-cookie-input');
+    const value = input ? input.value : '';
+    if (!value.trim()) {
+        if (window.showToast) window.showToast('Paste cookies first');
+        return;
+    }
+    if (window.showToast) window.showToast('Checking cookies...');
+    try {
+        const res = await fetch('/api/yt/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ input: value })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            if (input) input.value = '';
+            if (window.showToast) window.showToast('Signed in to YouTube Music');
+        } else if (window.showToast) {
+            window.showToast('Login failed: ' + ((data && data.error) || 'unknown error'));
+        }
+    } catch (e) {
+        if (window.showToast) window.showToast('Login failed');
+    }
+    await window.ytRefreshAccount();
+};
+
+window.ytLogout = async function() {
+    try {
+        await fetch('/api/yt/logout', { method: 'POST' });
+    } catch (e) { }
+    if (window.showToast) window.showToast('Signed out of YouTube Music');
+    await window.ytRefreshAccount();
+    if (window.location.hash.indexOf('yt-library') >= 0 && window.renderYtLibrary) window.renderYtLibrary();
+};
+
+window.renderSettingsAccount = async function() {
+    window.ytAccountCardMode = 'full';
+    await window.ytRefreshAccount();
+    routerView.innerHTML = `
+        <div class="settings-page" style="padding: 20px 30px; max-width: 800px; margin: 0 auto; color: var(--text-primary);">
+            <div class="hero-header" style="background: none; border-bottom: 1px solid var(--border-color); margin-bottom: 30px; padding: 10px 0 20px 0;">
+                <div class="hero-info">
+                    <div class="hero-title" style="font-size: 32px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 12px;"><i class="fas fa-user-circle" style="color: var(--accent);"></i> Account</div>
+                    <div class="hero-meta" style="color: var(--text-secondary); font-size: 14px;">Manage your YouTube Music account and library sync</div>
+                </div>
+            </div>
+            <div id="yt-account-card">${window.ytAccountCardHtml()}</div>
+            <div style="background: var(--search-bg); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
+                <h3 style="margin-top: 0; font-size: 20px;"><i class="fas fa-list-music" style="color: #FF0000;"></i> Your Library</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 18px; font-size: 14px;">Playlists, liked songs, subscriptions and albums load into the YouTube Music section of your library.</p>
+                <a href="#yt-library" class="btn" style="background: var(--app-bg); color: var(--text-primary); padding: 10px 18px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;"><i class="fas fa-arrow-right"></i> Open YouTube Music Library</a>
+            </div>
+        </div>
+    `;
+};
+
 window.discordLogin = function() {
     if (!window.discordAPI) return;
     window.discordSetStatus('Opening Discord login…');
@@ -783,6 +924,7 @@ const router = async (forceRefresh = false) => {
         else if (route === 'albums') await renderSavedAlbums();
         else if (route === 'new-releases') await renderNewReleases();
         else if (route === 'library') await renderMobileLibrary();
+        else if (route === 'yt-library') await renderYtLibrary();
         else if (route === 'playlists') await renderUserPlaylists();
         else if (route === 'cached') await renderCachedSongs();
         else if (route === 'userplaylist') await renderSingleUserPlaylist(id);
@@ -791,6 +933,7 @@ const router = async (forceRefresh = false) => {
         else if (route === 'settings' && (id === 'developer-news' || id === 'developer_news' || id === 'news')) await renderDeveloperNews();
         else if (route === 'settings' && id === 'about') await renderSettingsAbout();
         else if (route === 'settings' && id === 'updates') await renderSettingsUpdates();
+        else if (route === 'settings' && id === 'account') await renderSettingsAccount();
         else if (route === 'settings' && (id === 'backup' || !id)) await renderSettingsBackup();
         else if (route === 'developer-news' || route === 'developer_news' || route === 'news') await renderDeveloperNews();
         else routerView.innerHTML = `<h2>Page Not Found</h2>`;
@@ -3320,6 +3463,7 @@ window.updateSidebarState = function(isSettings) {
 }
 
 async function renderSettingsBackup() {
+    window.ytAccountCardMode = 'compact';
     routerView.innerHTML = `
         <div class="settings-page" style="padding: 20px 30px; max-width: 800px; margin: 0 auto; color: var(--text-primary);">
             <div class="hero-header" style="background: none; border-bottom: 1px solid var(--border-color); margin-bottom: 30px; padding: 10px 0 20px 0;">
@@ -3658,6 +3802,8 @@ async function renderSettingsAppearance() {
               </details>
           </div>
 
+          <div id="yt-account-card">${window.ytAccountCardHtml()}</div>
+
           <div style="background: var(--search-bg); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
               <h3 style="margin-top: 0; font-size: 20px;"><i class="fas fa-users" style="color: #1DB954;"></i> Listen Together</h3>
               <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">Sync your playback across devices or listen with friends in real-time. This connects with the Android App users.</p>
@@ -3732,6 +3878,7 @@ async function renderSettingsAppearance() {
         const detBox = document.getElementById('btn-discord-details');
         if (detBox) detBox.checked = window.discordUseDetails;
         window.discordUpdatePreview();
+        window.ytRefreshAccount();
     }, 50);
 }
 
@@ -3949,6 +4096,152 @@ async function renderMobileLibrary() {
         </div>
     `;
 }
+
+(function ytInjectNav() {
+    const build = () => {
+        if (!document.getElementById('yt-lib-style')) {
+            const style = document.createElement('style');
+            style.id = 'yt-lib-style';
+            style.textContent = '.yt-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:1px solid var(--text-secondary);background:transparent;color:var(--text-primary);font-size:13px;cursor:pointer;transition:border-color .18s ease,background .18s ease,color .18s ease}.yt-chip:hover{border-color:var(--accent)}.yt-chip.is-on{background:var(--accent);border-color:var(--accent);color:#fff}';
+            document.head.appendChild(style);
+        }
+        if (!document.getElementById('nav-yt-library')) {
+            const lists = document.querySelectorAll('#sidebar-main-menu .nav-links');
+            const target = lists.length > 1 ? lists[1] : lists[0];
+            if (target) {
+                const li = document.createElement('li');
+                li.innerHTML = '<a href="#yt-library" class="nav-item" id="nav-yt-library"><i class="fas fa-youtube"></i> <span>YouTube Music</span></a>';
+                target.insertBefore(li, target.firstChild);
+            }
+        }
+        if (!document.getElementById('nav-settings-account')) {
+            const backupNav = document.getElementById('nav-settings-backup');
+            if (backupNav && backupNav.parentElement && backupNav.parentElement.parentElement) {
+                const li = document.createElement('li');
+                li.innerHTML = '<a href="#settings/account" class="nav-item" id="nav-settings-account"><i class="fas fa-user-circle"></i> <span>Account</span></a>';
+                backupNav.parentElement.parentElement.insertBefore(li, backupNav.parentElement);
+            }
+        }
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
+    else build();
+    setTimeout(build, 1500);
+})();
+
+window.ytLibraryTab = 'playlists';
+window.__ytLikedTracks = [];
+
+window.ytLibraryTabs = [
+    { id: 'playlists', label: 'Playlists', icon: 'fa-list-music' },
+    { id: 'liked', label: 'Liked Songs', icon: 'fa-heart' },
+    { id: 'subscriptions', label: 'Subscriptions', icon: 'fa-user-music' },
+    { id: 'albums', label: 'Albums', icon: 'fa-compact-disc' }
+];
+
+window.ytLibrarySelect = function(tab) {
+    window.ytLibraryTab = tab;
+    window.renderYtLibrary();
+};
+
+window.ytPlayLiked = function(index) {
+    if (!window.__ytLikedTracks || !window.__ytLikedTracks.length) return;
+    playList(window.__ytLikedTracks, index);
+};
+
+window.ytRenderCards = function(items, route, fallbackSubtitle, round) {
+    if (!items.length) return `<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Nothing here yet</div>`;
+    let html = '<div style="display: flex; flex-wrap: wrap; gap: 24px;">';
+    items.forEach((item) => {
+        const image = getHighestQualityImage(item.image);
+        html += `
+            <div class="artist-card" onclick="window.location.hash='#${route}/${item.id}'" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; width: 150px;">
+                <div class="card-img-wrapper" style="width: 150px; height: 150px; border-radius: ${round ? '50%' : '12px'}; overflow: hidden; box-shadow: 0 8px 16px rgba(0,0,0,0.1); margin-bottom: 12px;">
+                    <img src="${image || 'https://via.placeholder.com/150'}" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <div class="card-title" style="text-align: center; font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${item.name || item.title || ''}</div>
+                <div class="card-subtitle" style="text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 4px;">${item.subtitle || fallbackSubtitle}</div>
+            </div>
+        `;
+    });
+    return html + '</div>';
+};
+
+window.ytRenderTracks = function(items) {
+    window.__ytLikedTracks = items.slice();
+    if (!items.length) return `<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No liked songs yet</div>`;
+    let html = '<div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">';
+    items.forEach((t, i) => {
+        const image = getHighestQualityImage(t.image);
+        const dur = t.duration ? `${Math.floor(t.duration / 60)}:${String(t.duration % 60).padStart(2, '0')}` : '';
+        html += `
+            <div style="display: flex; align-items: center; gap: 14px; padding: 8px 10px; border-radius: 10px; cursor: pointer;" onmouseover="this.style.background='var(--search-bg)'" onmouseout="this.style.background=''" onclick="window.ytPlayLiked(${i})">
+                <img src="${image || 'https://via.placeholder.com/150'}" style="width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex: none;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 14px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.name || ''}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.subtitle || ''}</div>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); flex: none;">${dur}</div>
+            </div>
+        `;
+    });
+    return html + '</div>';
+};
+
+window.renderYtLibrary = async function() {
+    if (!window.ytAccount) await window.ytRefreshAccount();
+    if (!window.ytAccount) {
+        routerView.innerHTML = `
+            <div class="hero-header">
+                <div class="hero-info">
+                    <div class="hero-title">YouTube Music</div>
+                    <div class="hero-meta">Not signed in</div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
+                <i class="fab fa-youtube" style="font-size: 48px; color: #FF0000; margin-bottom: 16px;"></i>
+                <div style="font-size: 16px; color: var(--text-secondary); margin-bottom: 20px;">Sign in with your Google account to see your playlists, liked songs and subscriptions.</div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn-primary" style="padding: 12px 24px; border-radius: 8px; cursor: pointer;" onclick="window.ytOpenLogin()"><i class="fab fa-google"></i> Sign in with Google</button>
+                    <button class="btn" style="background: var(--search-bg); color: var(--text-primary); padding: 12px 24px; border-radius: 8px; cursor: pointer;" onclick="window.location.hash='#settings'">Open Settings</button>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    const tabs = window.ytLibraryTabs.map((t) => {
+        const on = t.id === window.ytLibraryTab;
+        return `<button class="yt-chip${on ? ' is-on' : ''}" onclick="window.ytLibrarySelect('${t.id}')"><i class="fas ${t.icon}"></i> ${t.label}</button>`;
+    }).join('');
+    routerView.innerHTML = `
+        <div class="hero-header">
+            <div class="hero-info">
+                <div class="hero-title">YouTube Music</div>
+                <div class="hero-meta">${window.ytAccount.name || ''}${window.ytAccount.handle ? ' · ' + window.ytAccount.handle : ''}</div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 28px;">${tabs}</div>
+        <div id="yt-library-body" style="min-height: 200px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">Loading...</div>
+    `;
+    const body = document.getElementById('yt-library-body');
+    if (!body) return;
+    const tab = window.ytLibraryTab;
+    try {
+        const res = await fetch('/api/library/' + tab);
+        const data = await res.json();
+        if (!data || !data.success) {
+            body.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-secondary);">${(data && data.error) || 'Failed to load library'}</div>`;
+            return;
+        }
+        const items = data.data || [];
+        body.style.display = '';
+        if (tab === 'playlists') body.innerHTML = window.ytRenderCards(items, 'playlist', 'Playlist');
+        else if (tab === 'albums') body.innerHTML = window.ytRenderCards(items, 'album', 'Album');
+        else if (tab === 'subscriptions') body.innerHTML = window.ytRenderCards(items, 'artist', 'Artist', true);
+        else body.innerHTML = window.ytRenderTracks(items);
+    } catch (e) {
+        body.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Failed to load library</div>`;
+    }
+};
 
 window.focusMobileSearch = function() {
     // Reveal top search bar briefly and focus it

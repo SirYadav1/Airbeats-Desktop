@@ -232,13 +232,44 @@ class DiscordRpc {
     return ok;
   }
 
-  setStatus(s) {
+  async fetchStatus() {
+    if (!this.token) return null;
+    try {
+      const r = await fetch(API + '/users/@me/settings', {
+        headers: { Authorization: this.token, 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return STATUSES.indexOf(j && j.status) >= 0 ? j.status : null;
+    } catch (e) { return null; }
+  }
+
+  async pushStatus() {
+    if (!this.token) return false;
+    try {
+      const r = await fetch(API + '/users/@me/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: this.token, 'User-Agent': 'Mozilla/5.0' },
+        body: JSON.stringify({ status: this.status }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) this.log('status PATCH HTTP ' + r.status);
+      return r.ok;
+    } catch (e) {
+      this.log('status PATCH failed: ' + e.message);
+      return false;
+    }
+  }
+
+  async setStatus(s) {
     this.status = normStatus(s);
+    const ok = await this.pushStatus();
     if (this.connected) {
       if (this._lastActivity) this.setActivity(this._lastActivity);
       else this.clearActivity();
     }
-    return this.status;
+    return { status: this.status, ok };
   }
 
   async _sendActivity(a) {

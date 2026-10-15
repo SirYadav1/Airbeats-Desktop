@@ -393,7 +393,11 @@ window.discordChooseStatus = function(s) {
     window.__discordStatus = s;
     try { localStorage.setItem(RPC_STATUS_PREF, s); } catch (e) {}
     window.discordApplyStatusUi();
-    if (window.discordAPI && window.discordAPI.setStatus) window.discordAPI.setStatus(s);
+    if (window.discordAPI && window.discordAPI.setStatus) {
+        window.discordAPI.setStatus(s).then((r) => {
+            if (r && r.ok === false && window.showToast) window.showToast('Discord status update failed');
+        }).catch(() => {});
+    }
 };
 
 document.addEventListener('keydown', (e) => {

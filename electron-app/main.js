@@ -115,6 +115,12 @@ function dNotifyMain(payload) {
     }
 }
 
+async function dSyncLiveStatus() {
+    const live = await dRpc.fetchStatus();
+    if (live) dRpc.status = live;
+    return dRpc.status;
+}
+
 async function dUseToken(token) {
     dToken = token;
     dSaveToken(token);
@@ -122,6 +128,7 @@ async function dUseToken(token) {
         const info = await dRpc.getUserInfo(token);
         dUserInfo = info;
         dRpc.connect(token);
+        await dSyncLiveStatus();
         dNotifyMain({ ok: true, user: info, tokenSaved: true });
         return info;
     } catch (e) {
@@ -263,6 +270,7 @@ dIpc.handle('discord-get-state', async () => {
     if (!dToken) return { ok: false, status: dRpc.status };
     try {
         if (!dUserInfo) dUserInfo = await dRpc.getUserInfo(dToken);
+        await dSyncLiveStatus();
         return { ok: true, user: dUserInfo, status: dRpc.status };
     } catch (e) {
         dToken = null;
@@ -318,13 +326,13 @@ dIpc.handle('discord-logout', async () => {
     return true;
 });
 dIpc.handle('discord-set-status', async (e, s) => {
-    const v = dRpc.setStatus(s);
+    const r = await dRpc.setStatus(s);
     try {
         let cur = {};
         try { cur = JSON.parse(dFs.readFileSync(dStoreFile(), 'utf8')); } catch (err) { }
-        dFs.writeFileSync(dStoreFile(), JSON.stringify({ ...cur, status: v }), 'utf8');
+        dFs.writeFileSync(dStoreFile(), JSON.stringify({ ...cur, status: r.status }), 'utf8');
     } catch (err) { }
-    return v;
+    return r;
 });
 dIpc.on('island-state', (e, state) => {
     if (!dynamicIslandWindow || dynamicIslandWindow.isDestroyed()) return;
@@ -346,7 +354,7 @@ try {
     if (saved) {
         dToken = saved;
         dRpc.getUserInfo(saved)
-            .then((info) => { dRpc.connect(saved); dNotifyMain({ ok: true, user: info, tokenSaved: true }); })
+            .then(async (info) => { dRpc.connect(saved); await dSyncLiveStatus(); dNotifyMain({ ok: true, user: info, tokenSaved: true }); })
             .catch((err) => { console.log('[discord] resume failed', err.message); dToken = null; });
     }
 } catch (e) { }

@@ -400,6 +400,15 @@ window.discordChooseStatus = function(s) {
     }
 };
 
+const RPC_DETAILS_PREF = 'discord_use_details';
+window.discordUseDetails = localStorage.getItem(RPC_DETAILS_PREF) === 'true';
+
+window.discordToggleDetails = function(el) {
+    window.discordUseDetails = !!el.checked;
+    try { localStorage.setItem(RPC_DETAILS_PREF, el.checked ? 'true' : 'false'); } catch (e) {}
+    window.syncDiscordActivity();
+};
+
 document.addEventListener('keydown', (e) => {
     if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return;
     if (e.key !== 'D' && e.key !== 'd') return;
@@ -452,6 +461,7 @@ window.__discordSyncNow = function() {
         smallText: 'AirBeats',
         startTimestamp: start,
         endTimestamp: end,
+        statusDisplayType: window.discordUseDetails ? 2 : 1,
         buttons: rpcButtons
     });
     if (window.dlog) {
@@ -561,6 +571,8 @@ window.discordApplyUiState = function() {
     });
     const box = document.getElementById('btn-discord-rpc');
     if (box) box.checked = window.discordRpcEnabled;
+    const det = document.getElementById('btn-discord-details');
+    if (det) det.checked = window.discordUseDetails;
     if (st.loggedIn && st.user) {
         const el = document.getElementById('discord-status-box');
         if (el) el.textContent = 'Connected as ' + (st.user.name || st.user.username)
@@ -3556,6 +3568,17 @@ async function renderSettingsAppearance() {
                   </div>
               </div>
 
+              <div style="display: flex; align-items: center; gap: 10px; margin-top: 16px; user-select: none;">
+                  <div>
+                      <div style="font-size: 14px;">Use details instead of state</div>
+                      <div style="font-size: 12px; color: var(--text-secondary);">Show the song title instead of the artist name</div>
+                  </div>
+                  <label class="m3-switch" style="margin-left: auto;" title="Use details instead of state">
+                      <input type="checkbox" id="btn-discord-details" onchange="window.discordToggleDetails(this)">
+                      <span class="m3-track"><span class="m3-knob"></span></span>
+                  </label>
+              </div>
+
               <details style="margin-top: 16px;">
                   <summary style="cursor: pointer; color: var(--text-secondary); font-size: 13px;">Login not working? Paste your token manually</summary>
                   <div style="display: flex; gap: 10px; margin-top: 12px;">
@@ -3639,6 +3662,8 @@ async function renderSettingsAppearance() {
         window.discordRefreshState();
         const rpcBox = document.getElementById('btn-discord-rpc');
         if (rpcBox) rpcBox.checked = window.discordRpcEnabled;
+        const detBox = document.getElementById('btn-discord-details');
+        if (detBox) detBox.checked = window.discordUseDetails;
     }, 50);
 }
 

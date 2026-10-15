@@ -20,3 +20,8 @@ dCB.exposeInMainWorld('discordAPI', {
     rlog: (m) => dIpcR.send('discord-log', String(m)),
 });
 dIpcR.on('discord-dump-request', () => {});
+
+const { ipcRenderer: ytIpcR, contextBridge: ytCB } = require('electron');
+ytCB.exposeInMainWorld('ytmusicAPI', {
+    openLogin: () => ytIpcR.invoke('yt-open-login')
+});

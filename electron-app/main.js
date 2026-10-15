@@ -478,3 +478,88 @@ dIpc.handle('discord-login-callback', async (e, code) => {
 });
 
 
+
+const { ipcMain: ytIpc, BrowserWindow: ytWin } = require('electron');
+
+const YT_LOGIN_URL = 'https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmusic.youtube.com';
+const YT_LOGIN_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+function ytPostLogin(cookie, visitorData) {
+    return new Promise((resolve) => {
+        const body = JSON.stringify({ input: cookie, visitorData: visitorData || '' });
+        const target = new URL(a0_0xServerUrl() + '/api/yt/login');
+        const req = http.request({
+            hostname: target.hostname,
+            port: target.port,
+            path: target.pathname,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        }, (res) => {
+            let text = '';
+            res.on('data', (chunk) => { text += chunk; });
+            res.on('end', () => {
+                try { resolve(JSON.parse(text)); } catch (err) { resolve({ success: false, error: 'invalid response' }); }
+            });
+        });
+        req.on('error', (err) => resolve({ success: false, error: err.message }));
+        req.write(body);
+        req.end();
+    });
+}
+
+function ytReadCookies(sess) {
+    return sess.cookies.get({ domain: 'youtube.com' }).then((cookies) => {
+        const jar = {};
+        cookies.forEach((c) => { if (c.name && c.value && jar[c.name] === undefined) jar[c.name] = c.value; });
+        if (!jar.SAPISID) return null;
+        return Object.keys(jar).map((k) => k + '=' + jar[k]).join('; ');
+    }).catch(() => null);
+}
+
+ytIpc.handle('yt-open-login', () => new Promise((resolve) => {
+    const win = new ytWin({
+        width: 1000,
+        height: 780,
+        title: 'Sign in to YouTube Music',
+        autoHideMenuBar: true,
+        webPreferences: {
+            partition: 'yt-login',
+            nodeIntegration: false,
+            contextIsolation: true,
+            devTools: false
+        }
+    });
+    win.setMenuBarVisibility(false);
+    win.webContents.setUserAgent(YT_LOGIN_UA);
+    let done = false;
+    let activeCookie = null;
+    let lastTryAt = 0;
+    let inFlight = false;
+    const finish = (result) => {
+        if (done) return;
+        done = true;
+        clearInterval(poll);
+        if (!win.isDestroyed()) win.close();
+        resolve(result);
+    };
+    const poll = setInterval(async () => {
+        if (done || inFlight || win.isDestroyed()) return;
+        const cookie = await ytReadCookies(win.webContents.session);
+        if (!cookie) return;
+        if (cookie === activeCookie && Date.now() - lastTryAt < 15000) return;
+        activeCookie = cookie;
+        lastTryAt = Date.now();
+        inFlight = true;
+        try {
+            const visitorData = await win.webContents.executeJavaScript(
+                "(function(){try{var c=window.ytcfg;var y=window.yt&&window.yt.config_;var v=c&&c.get&&c.get('VISITOR_DATA')||y&&y.VISITOR_DATA;return v||null}catch(e){return null}})()"
+            ).catch(() => null);
+            const result = await ytPostLogin(cookie, visitorData);
+            if (result && result.success) finish({ ok: true, account: result.data });
+        } finally {
+            inFlight = false;
+        }
+    }, 2000);
+    win.on('closed', () => finish({ ok: false }));
+    win.loadURL(YT_LOGIN_URL);
+}));

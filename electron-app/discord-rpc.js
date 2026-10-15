@@ -3,10 +3,13 @@ const GATEWAY = 'wss://gateway.discord.gg/?v=10&encoding=json';
 const APPLICATION_ID = (process.env.DISCORD_APPLICATION_ID || '').trim();
 const SEND_GAP_MS = 700;
 const API = 'https://discord.com/api/v9';
+const STATUSES = ['online', 'idle', 'dnd', 'invisible'];
+const normStatus = (s) => (STATUSES.indexOf(String(s)) >= 0 ? String(s) : 'online');
 
 class DiscordRpc {
-  constructor(applicationId) {
+  constructor(applicationId, status) {
     this.applicationId = (applicationId || APPLICATION_ID || '').trim();
+    this.status = normStatus(status);
     this.ws = null;
     this.token = null;
     this.seq = null;
@@ -209,6 +212,7 @@ class DiscordRpc {
   }
 
   async setActivity(a) {
+    this._lastActivity = a && (a.details || a.state) ? a : null;
     this._pending = a;
     if (this._sending) { this._dirty = true; return true; }
     this._sending = true;
@@ -226,6 +230,15 @@ class DiscordRpc {
       this._sending = false;
     }
     return ok;
+  }
+
+  setStatus(s) {
+    this.status = normStatus(s);
+    if (this.connected) {
+      if (this._lastActivity) this.setActivity(this._lastActivity);
+      else this.clearActivity();
+    }
+    return this.status;
   }
 
   async _sendActivity(a) {
@@ -287,7 +300,7 @@ class DiscordRpc {
     const payload = {
       since: null,
       activities: [activity],
-      status: a.paused ? 'idle' : 'online',
+      status: this.status,
       afk: false,
     };
     this.log('SEND presence: ' + JSON.stringify(payload).slice(0, 1500));
@@ -298,7 +311,7 @@ class DiscordRpc {
     if (!this.token) return false;
     if (!this.connected) return false;
     this.log('SEND clear presence (activities: [])');
-    return this._send(3, { since: null, activities: [], status: 'online', afk: false });
+    return this._send(3, { since: null, activities: [], status: this.status, afk: false });
   }
 
   disconnect() {

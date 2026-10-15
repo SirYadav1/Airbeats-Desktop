@@ -359,15 +359,51 @@ const RPC_PREF = 'discord_rpc_enabled';
 window.discordRpcEnabled = localStorage.getItem(RPC_PREF) !== 'false';
 
 
-window.discordToggleRpc = function(el) {
-    window.discordRpcEnabled = !!el.checked;
-    try { localStorage.setItem(RPC_PREF, el.checked ? 'true' : 'false'); } catch (e) {}
-    if (!el.checked && window.discordAPI && window.discordAPI.setActivity) {
+window.discordSetRpcEnabled = function(on, silent) {
+    window.discordRpcEnabled = !!on;
+    try { localStorage.setItem(RPC_PREF, on ? 'true' : 'false'); } catch (e) {}
+    const cb = document.getElementById('btn-discord-rpc');
+    if (cb && cb.checked !== !!on) cb.checked = !!on;
+    if (!on && window.discordAPI && window.discordAPI.setActivity) {
         window.discordAPI.setActivity({ details: '', state: '' });
     } else {
         window.syncDiscordActivity();
     }
+    if (!silent && window.showToast) window.showToast('Discord Rich Presence ' + (on ? 'on' : 'off'));
 };
+
+window.discordToggleRpc = function(el) {
+    window.discordSetRpcEnabled(!!el.checked, true);
+};
+
+const RPC_STATUS_PREF = 'discord_rpc_status';
+window.__discordStatus = (function () {
+    const s = localStorage.getItem(RPC_STATUS_PREF);
+    return ['online', 'idle', 'dnd', 'invisible'].indexOf(s) >= 0 ? s : 'online';
+})();
+
+window.discordApplyStatusUi = function() {
+    document.querySelectorAll('#discord-status-chips [data-status]').forEach((el) => {
+        el.classList.toggle('is-on', el.dataset.status === window.__discordStatus);
+    });
+};
+
+window.discordChooseStatus = function(s) {
+    if (['online', 'idle', 'dnd', 'invisible'].indexOf(s) < 0) return;
+    window.__discordStatus = s;
+    try { localStorage.setItem(RPC_STATUS_PREF, s); } catch (e) {}
+    window.discordApplyStatusUi();
+    if (window.discordAPI && window.discordAPI.setStatus) window.discordAPI.setStatus(s);
+};
+
+document.addEventListener('keydown', (e) => {
+    if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return;
+    if (e.key !== 'D' && e.key !== 'd') return;
+    const el = e.target;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+    e.preventDefault();
+    window.discordSetRpcEnabled(!window.discordRpcEnabled, false);
+});
 
 window.__discordSyncNow = function() {
     if (!window.discordRpcEnabled) return;
@@ -404,8 +440,7 @@ window.__discordSyncNow = function() {
         smallImage: 'https://raw.githubusercontent.com/d0x-dev/Airbeats-Desktop/main/electron-app/icon.png',
         smallText: 'AirBeats',
         startTimestamp: start,
-        endTimestamp: end,
-        paused: !playing
+        endTimestamp: end
     });
     if (window.dlog) {
         window.dlog('sync playing=' + playing + ' t=' + (t.name || '')
@@ -482,6 +517,11 @@ window.discordRefreshState = async function() {
     try {
         const st = await window.discordAPI.getState();
         window.dlog('getState -> ' + JSON.stringify(st));
+        if (st && st.status) {
+            window.__discordStatus = st.status;
+            try { localStorage.setItem(RPC_STATUS_PREF, st.status); } catch (e) {}
+            window.discordApplyStatusUi();
+        }
         if (st && st.ok) {
             window.__discordUser = st.user;
             try { localStorage.setItem('discord_user', JSON.stringify(st.user)); } catch (e) {}
@@ -514,6 +554,7 @@ window.discordApplyUiState = function() {
         if (el) el.textContent = 'Connected as ' + (st.user.name || st.user.username)
             + ' (@"' + st.user.username + '")';
     }
+    window.discordApplyStatusUi();
 };
 
 window.discordRenderState = function(loggedIn, user) {
@@ -3470,6 +3511,9 @@ async function renderSettingsAppearance() {
                   .m3-switch input:checked ~ .m3-track{background:var(--accent)}
                   .m3-switch input:checked:hover ~ .m3-track{filter:brightness(1.08)}
                   .m3-switch input:checked ~ .m3-track .m3-knob{top:4px;left:24px;width:24px;height:24px;font-size:13px}
+                  .dc-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:1px solid var(--text-secondary);background:transparent;color:var(--text-primary);font-size:13px;cursor:pointer;transition:border-color .18s ease,background .18s ease,color .18s ease}
+                  .dc-chip:hover{border-color:var(--accent)}
+                  .dc-chip.is-on{background:var(--accent);border-color:var(--accent);color:#fff}
               </style>
 
               <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
@@ -3482,10 +3526,21 @@ async function renderSettingsAppearance() {
 
                   <div style="display: inline-flex; align-items: center; gap: 10px; margin-left: auto; user-select: none;">
                       <span style="font-size: 14px; color: var(--text-secondary);">Rich Presence</span>
+                      <span style="font-size: 11px; color: var(--text-secondary); opacity: .7;">Ctrl+Shift+D</span>
                       <label class="m3-switch" title="Discord Rich Presence on / off">
                           <input type="checkbox" id="btn-discord-rpc" onchange="window.discordToggleRpc(this)">
                           <span class="m3-track"><span class="m3-knob"><i class="fab fa-discord"></i></span></span>
                       </label>
+                  </div>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 18px; flex-wrap: wrap;">
+                  <span style="font-size: 14px; color: var(--text-secondary);">Status</span>
+                  <div id="discord-status-chips" style="display: inline-flex; gap: 8px; flex-wrap: wrap;">
+                      <button class="dc-chip" data-status="online" onclick="window.discordChooseStatus('online')"><i class="fas fa-circle" style="color: #23a55a;"></i> Online</button>
+                      <button class="dc-chip" data-status="idle" onclick="window.discordChooseStatus('idle')"><i class="fas fa-moon" style="color: #f0b232;"></i> Idle</button>
+                      <button class="dc-chip" data-status="dnd" onclick="window.discordChooseStatus('dnd')"><i class="fas fa-minus-circle" style="color: #f23f43;"></i> DND</button>
+                      <button class="dc-chip" data-status="invisible" onclick="window.discordChooseStatus('invisible')"><i class="fas fa-eye-slash" style="color: #80848e;"></i> Invisible</button>
                   </div>
               </div>
 

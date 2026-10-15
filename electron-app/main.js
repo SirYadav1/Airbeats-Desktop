@@ -69,7 +69,15 @@ function dAppId() {
     } catch (err) { }
     return (process.env.DISCORD_APPLICATION_ID || '').trim();
 }
-const dRpc = new DiscordRpc(dAppId());
+function dStatus() {
+    try {
+        const f = dLogPath.join(app.getPath('userData'), 'discord.json');
+        const j = JSON.parse(dFs.readFileSync(f, 'utf8'));
+        if (j.status) return String(j.status).trim();
+    } catch (err) { }
+    return 'online';
+}
+const dRpc = new DiscordRpc(dAppId(), dStatus());
 let dToken = null;
 let dUserInfo = null;
 let dLoginWin = null;
@@ -252,10 +260,10 @@ dIpc.on('discord-login-dump', async () => {
 
 dIpc.handle('discord-get-state', async () => {
     console.log('[discord] getState asked, token=' + !!dToken);
-    if (!dToken) return { ok: false };
+    if (!dToken) return { ok: false, status: dRpc.status };
     try {
         if (!dUserInfo) dUserInfo = await dRpc.getUserInfo(dToken);
-        return { ok: true, user: dUserInfo };
+        return { ok: true, user: dUserInfo, status: dRpc.status };
     } catch (e) {
         dToken = null;
         dRpc.disconnect();
@@ -308,6 +316,15 @@ dIpc.handle('discord-logout', async () => {
     await dClearDiscordSession();
     dNotifyMain({ ok: false, loggedOut: true });
     return true;
+});
+dIpc.handle('discord-set-status', async (e, s) => {
+    const v = dRpc.setStatus(s);
+    try {
+        let cur = {};
+        try { cur = JSON.parse(dFs.readFileSync(dStoreFile(), 'utf8')); } catch (err) { }
+        dFs.writeFileSync(dStoreFile(), JSON.stringify({ ...cur, status: v }), 'utf8');
+    } catch (err) { }
+    return v;
 });
 dIpc.on('island-state', (e, state) => {
     if (!dynamicIslandWindow || dynamicIslandWindow.isDestroyed()) return;

@@ -161,7 +161,6 @@ window.electronAPI.onTrackUpdated((data) => {
     window.electronAPI.expandIsland();
 });
 
-// ---- appearance options (size / position / background) ----
 var islandOpts;
 
 function applyStateClasses() {

@@ -6630,13 +6630,6 @@ body.route-home .shelf-scroll-row {
     color: rgba(187, 134, 252, 1);
 }
 
-/* =====================================================================
-   AIRBEATS FEATURE STYLES (desktop-native)
-   Loading dots, settings pages, chips, switches, logs, token viewer,
-   premium prompt, color effects, dynamic background, fonts, grid size.
-   ===================================================================== */
-
-/* ---------------- accent loading dots ---------------- */
 .air-dots-wrap {
     display: flex;
     flex-direction: column;
@@ -6662,7 +6655,6 @@ body.route-home .shelf-scroll-row {
 }
 .air-dots-label { font-size: 13px; color: var(--text-secondary); letter-spacing: 0.2px; }
 
-/* ---------- ui polish: light-theme separation + home refresh + bg perf ---------- */
 :root:not([data-theme='dark']) #router-view [style*="var(--search-bg)"] {
     border: 1px solid rgba(0, 0, 0, 0.06);
 }
@@ -6689,7 +6681,6 @@ body.dbg-blur .air-dynamic-bg,
 body.dbg-fluid .air-dynamic-bg { will-change: opacity; }
 body:not(.dbg-gradient):not(.dbg-blur):not(.dbg-fluid) .air-dynamic-bg { display: none; }
 
-/* ---------------- settings pages ---------------- */
 .air-settings-page { padding: 20px 30px; max-width: 880px; margin: 0 auto; color: var(--text-primary); }
 .air-settings-head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
 .air-settings-head h2 { font-size: 26px; font-weight: 700; }
@@ -6716,7 +6707,6 @@ body:not(.dbg-gradient):not(.dbg-blur):not(.dbg-fluid) .air-dynamic-bg { display
 .air-select { min-width: 190px; max-width: 300px; }
 .air-input { min-width: 240px; max-width: 340px; }
 
-/* ---------------- switch ---------------- */
 .air-switch { position: relative; display: inline-flex; align-items: center; width: 52px; height: 32px; flex: none; cursor: pointer; }
 .air-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .air-switch span {
@@ -6742,7 +6732,6 @@ body:not(.dbg-gradient):not(.dbg-blur):not(.dbg-fluid) .air-dynamic-bg { display
 .air-switch input:checked ~ span { background: var(--accent); }
 .air-switch input:checked ~ span::after { top: 4px; left: 24px; width: 24px; height: 24px; }
 
-/* ---------------- chips ---------------- */
 .air-chip-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .air-chip {
     display: inline-flex;
@@ -6774,13 +6763,11 @@ body:not(.dbg-gradient):not(.dbg-blur):not(.dbg-fluid) .air-dynamic-bg { display
 
 .air-nav-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block; margin-left: 8px; }
 
-/* ---------------- accent swatches ---------------- */
 .color-swatch.active, .air-swatch.active {
     outline: 3px solid var(--text-primary);
     outline-offset: 2px;
 }
 
-/* ---------------- account tabs ---------------- */
 .acc-tabs { display: inline-flex; gap: 6px; background: var(--search-bg); padding: 6px; border-radius: 999px; margin-bottom: 20px; border: 1px solid var(--border-color, rgba(128, 128, 128, 0.18)); }
 .acc-tab {
     border: none;
@@ -6797,7 +6784,6 @@ body:not(.dbg-gradient):not(.dbg-blur):not(.dbg-fluid) .air-dynamic-bg { display
 }
 .acc-tab.active { background: var(--accent); color: #111; }
 
-/* ---------------- token viewer ---------------- */
 .air-token-masked {
     font-family: monospace;
     font-size: 12px;
@@ -6824,7 +6810,6 @@ body:not(.dbg-gradient):not(.dbg-blur):not(.dbg-fluid) .air-dynamic-bg { display
     outline: none;
 }
 
-/* ---------------- premium prompt ---------------- */
 .air-premium-prompt {
     display: flex;
     align-items: center;
@@ -6857,7 +6842,6 @@ body:not(.dbg-gradient):not(.dbg-blur):not(.dbg-fluid) .air-dynamic-bg { display
     .air-premium-btn { width: 100%; }
 }
 
-/* ---------------- logs page ---------------- */
 .air-stats-row { display: flex; gap: 14px; flex-wrap: wrap; }
 .air-stat { flex: 1; min-width: 110px; background: var(--app-bg); border-radius: 12px; padding: 14px; text-align: center; border: 1px solid var(--border-color, rgba(128, 128, 128, 0.18)); }
 .air-stat-num { font-size: 26px; font-weight: 700; color: var(--text-primary); }
@@ -6905,7 +6889,6 @@ body:not(.dbg-gradient):not(.dbg-blur):not(.dbg-fluid) .air-dynamic-bg { display
     overflow: auto;
 }
 
-/* ---------------- color effects (gradient accents) ---------------- */
 body.ace-gradient .btn-primary,
 body.ace-gradient .air-chip.active,
 body.ace-gradient .acc-tab.active,
@@ -6925,7 +6908,6 @@ body.ace-rainbow .air-chip.active {
     transition: background 0.9s linear;
 }
 
-/* ---------------- dynamic background ---------------- */
 .air-dynamic-bg {
     position: fixed;
     inset: 0;
@@ -6950,7 +6932,6 @@ body.dbg-fluid .app-right { background: transparent !important; }
     100% { transform: scale(1.4) translateY(2%); }
 }
 
-/* ---------------- fonts ---------------- */
 body[data-font]:not([data-font='system']) { font-family: var(--app-font) !important; }
 body[data-font]:not([data-font='system']) h1,
 body[data-font]:not([data-font='system']) h2,
@@ -6978,7 +6959,6 @@ body[data-font]:not([data-font='system']) .air-settings-page {
     font-family: var(--app-font) !important;
 }
 
-/* ---------------- grid cell size ---------------- */
 body.grid-small .grid-container { gap: 14px; margin-bottom: 28px; }
 body.grid-small .grid-container .playlist-card { width: 118px; }
 body.grid-small .grid-container .playlist-card .card-img-wrapper,

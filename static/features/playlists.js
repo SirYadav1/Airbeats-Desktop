@@ -1,7 +1,6 @@
 // AirBeats desktop — playlists mirroring & cards
 // Loaded as a classic script after script.js (desktop-native implementation).
 
-// --------------------------- playlists mirroring ---------------------------
 window.__ytMirrorLast = 0;
 
 window.ytMirrorPlaylists = async function (ytPlaylists, force) {
@@ -44,7 +43,6 @@ window.ytMirrorPlaylists = async function (ytPlaylists, force) {
     return playlists;
 };
 
-// ----------------------- local playlist card markup -----------------------
 window.airLocalPlaylistCardHtml = function (pl, forceLocal) {
     let thumbsHtml = '';
     if (pl.image) {

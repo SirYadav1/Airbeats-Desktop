@@ -1,7 +1,6 @@
 // AirBeats desktop — appearance engine (accent color, color effects)
 // Loaded as a classic script after script.js (desktop-native implementation).
 
-// ----------------------- accent color + effects -----------------------
 window.AIR_ACCENT_EFFECTS = {
     none: { name: 'None', desc: 'Default balanced tonal appearance' },
     fidelity: { name: 'Fidelity', desc: 'Faithfully mirrors the exact accent color' },
@@ -80,7 +79,6 @@ window.applyAccentEffect = function (effectKey, baseColor) {
     root.style.setProperty('--primary-color', primary);
 };
 
-// ------------------------- effect selection UI -------------------------
 window.setAccentEffect = function (key) {
     localStorage.setItem('accent_effect', key);
     window.applyAccentEffect(key, localStorage.getItem('accent_color') || '#c6e355');
@@ -90,7 +88,6 @@ window.setAccentEffect = function (key) {
     airToast('Color effect: ' + ((window.AIR_ACCENT_EFFECTS[key] || {}).name || key));
 };
 
-// --------------------------- dynamic background ---------------------------
 window.AIR_DBG_MODES = ['off', 'gradient', 'blur', 'fluid'];
 
 window.setDynamicBackground = function (mode) {
@@ -135,7 +132,6 @@ window.airUpdateBgArt = function () {
     else start();
 })();
 
-// -------------------------------- fonts --------------------------------
 window.AIR_FONTS = {
     inter: { name: 'Inter', stack: "'Inter', -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif" },
     system: { name: 'System Default', stack: '' },
@@ -156,7 +152,6 @@ window.setAppFont = function (key) {
     document.querySelectorAll('.air-font-chip').forEach((el) => el.classList.toggle('active', el.getAttribute('data-font') === key));
 };
 
-// ------------------------------ grid size ------------------------------
 window.setGridSize = function (size) {
     size = size === 'small' ? 'small' : 'big';
     localStorage.setItem('grid_size', size);
@@ -164,7 +159,6 @@ window.setGridSize = function (size) {
     document.querySelectorAll('.air-grid-chip').forEach((el) => el.classList.toggle('active', el.getAttribute('data-size') === size));
 };
 
-// --------------------------- island options ---------------------------
 window.AIR_ISLAND_DEFAULTS = { size: 'medium', position: 'center', bg: 'black' };
 
 window.islandGetOptions = function () {
@@ -205,7 +199,6 @@ window.islandSyncChips = function () {
     document.querySelectorAll('.air-island-bg').forEach((el) => el.classList.toggle('active', el.getAttribute('data-bg') === opts.bg));
 };
 
-// --------------------------- appearance init ---------------------------
 window.airAppearanceInit = function () {
     const accent = localStorage.getItem('accent_color') || '#c6e355';
     document.querySelectorAll('.air-swatch').forEach((el) => el.classList.toggle('active', el.getAttribute('data-color') === accent));

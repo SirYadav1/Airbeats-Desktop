@@ -1,7 +1,6 @@
 // AirBeats desktop — account page (Google + Discord tabs, token viewer, premium prompt)
 // Loaded as a classic script after script.js (desktop-native implementation).
 
-// ----------------------- discord card (shared markup) -----------------------
 window.discordCardHtml = function () {
     return `
           <div style="background: var(--search-bg); padding: 24px; border-radius: 12px; margin-bottom: 24px;">
@@ -109,7 +108,6 @@ window.discordCardInit = function () {
     window.discordUpdatePreview();
 };
 
-// --------------------------- account page tabs ---------------------------
 window.accSwitchTab = function (tab) {
     const tabs = ['google', 'discord'];
     tabs.forEach((name) => {
@@ -180,7 +178,6 @@ window.setUseLoginForBrowse = function (checked) {
     return window.airSaveSettings({ use_login_for_browse: !!checked });
 };
 
-// --------------------------- premium login prompt ---------------------------
 window.ytPremiumPromptHtml = function (compact) {
     return `
     <div class="air-premium-prompt ${compact ? 'compact' : ''}">

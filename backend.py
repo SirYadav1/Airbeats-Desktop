@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from flask import request, jsonify, redirect, send_file, Response, stream_with_context
 
-# ---- Network reliability fix -------------------------------------------------
 # Some networks advertise an IPv6 default route while the upstream is a black
 # hole. DNS returns AAAA records first, so connects hang and yt-dlp/requests
 # stall for minutes. Prefer IPv4 results first so connects succeed instantly.
@@ -677,7 +676,7 @@ def format_saavn_songs(items):
     return out
 
 
-# --- Matching engine: Python port of the Android AirBeats TrackMatcher.kt ---
+# Matching engine: Python port of the Android AirBeats TrackMatcher.kt
 # Decides whether a JioSaavn entry and a YouTube Music entry are the same recording.
 
 _MATCH_NOISE_WORDS = {
@@ -1305,7 +1304,7 @@ def add_yt_routes(app, get_lyrics_fn):
                 return jsonify({"success": True, "data": _home_cache["data"]})
         
         try:
-            # ---- Home feed + charts + new releases + fresh finds run in
+            # Home feed + charts + new releases + fresh finds run in
             # parallel. Previously sequential (~4-5s); now the total is roughly
             # the slowest call plus parse/render.
             def _charts_task():
@@ -2240,9 +2239,6 @@ def add_yt_routes(app, get_lyrics_fn):
             return jsonify({"success": False, "error": "no match"})
         return jsonify({"success": True, "data": format_saavn_song(match)})
 
-    # ------------------------------------------------------------------
-    # Desktop settings (Content settings -> General)
-    # ------------------------------------------------------------------
     def _sanitize_settings(payload):
         updates = {}
         if 'saavn_enabled' in payload:
@@ -2289,9 +2285,6 @@ def add_yt_routes(app, get_lyrics_fn):
         log_event('info', 'settings updated: ' + ', '.join(sorted(updates.keys())))
         return jsonify({"success": True, "data": dict(_desktop_settings)})
 
-    # ------------------------------------------------------------------
-    # YouTube token viewer (Account -> Google tab -> tap to show token)
-    # ------------------------------------------------------------------
     def _mask_secret(value):
         value = str(value or '')
         if len(value) <= 8:
@@ -2319,9 +2312,6 @@ def add_yt_routes(app, get_lyrics_fn):
         }
         return jsonify({"success": True, "data": data})
 
-    # ------------------------------------------------------------------
-    # Playlist creation on YouTube Music (playlists page sync toggle)
-    # ------------------------------------------------------------------
     @app.route('/api/yt/create_playlist', methods=['POST'])
     def api_yt_create_playlist():
         if not _yt_auth:
@@ -2344,9 +2334,6 @@ def add_yt_routes(app, get_lyrics_fn):
         log_event('info', 'yt create_playlist "' + title + '" -> ' + (browse_id or '?'))
         return jsonify({"success": True, "data": {"id": browse_id, "name": title}})
 
-    # ------------------------------------------------------------------
-    # Logs / crash reports
-    # ------------------------------------------------------------------
     _client_log_counter = {'window': 0, 'count': 0}
 
     def _client_log_allow():

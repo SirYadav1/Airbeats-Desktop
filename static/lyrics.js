@@ -201,7 +201,6 @@ let lyricsAnimationFrame = null;
 let lastAudioTimeMs = 0;
 let lastTimeUpdateReal = 0;
 
-// ---------------------- lyrics sync offset ----------------------
 // Positive = lyrics appear LATER than audio (delay), negative = earlier.
 // Per-song value saved in localStorage; 0 default.
 let lyricsOffsetMs = 0;

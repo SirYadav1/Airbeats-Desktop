@@ -334,14 +334,9 @@ dIpc.handle('discord-set-status', async (e, s) => {
     } catch (err) { }
     return r;
 });
-// ---------------------------------------------------------------------------
-// Dynamic Island geometry — the window hugs the island's visible box.
-// The island BrowserWindow used to sit at a fixed 400x120 / 450x260 / 200x100
-// size, so its transparent margins swallowed clicks meant for whatever was
-// around the island (browser tabs, app buttons, ...). Now every state change
-// re-sizes the window to the island's real dimensions (+ small pads for the
-// margin/shadow), so only the pill itself captures clicks.
-// ---------------------------------------------------------------------------
+// The island window is resized to the pill's real box on every state change
+// (+ small pads for margin/shadow), so transparent margins never swallow
+// clicks meant for elements around the island.
 let a0LastIslandState = null;
 function a0IslandDims(state) {
     const opts = a0IslandReadOpts() || {};
@@ -394,10 +389,8 @@ dIpc.on('island-state', (e, state) => {
     a0IslandApplyState(String(state || 'hidden'));
 });
 
-// ---------------------------------------------------------------------------
-// Dynamic Island appearance options (size / position / background).
-// Stored in userData/island-options.json and pushed to the island window.
-// ---------------------------------------------------------------------------
+// Dynamic Island appearance options, persisted in userData/island-options.json
+// and pushed to the island window.
 const a0IslandOptsFile = dLogPath.join(require('electron').app.getPath('userData'), 'island-options.json');
 function a0IslandReadOpts() {
     try { return JSON.parse(dFs.readFileSync(a0IslandOptsFile, 'utf8')); } catch (e) { return null; }

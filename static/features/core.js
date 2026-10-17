@@ -1,7 +1,6 @@
 // AirBeats desktop — core helpers (i18n, colors, loading dots, settings bridge, client error reporting)
 // Loaded as a classic script after script.js (desktop-native implementation).
 
-// ------------------------------- i18n -------------------------------
 window.AIR_LANG = localStorage.getItem('air_lang') || 'en';
 window.AIR_I18N = {
     en: {
@@ -145,7 +144,6 @@ window.setUiLanguage = function (code) {
     if ((window.location.hash || '').indexOf('#settings') === 0 && window.router) window.router();
 };
 
-// --------------------------- home feed refresh ---------------------------
 window.airRefreshHomeFeed = function (btn) {
     if (btn && btn.classList) {
         if (btn.classList.contains('spinning')) return; // already refreshing
@@ -190,7 +188,6 @@ window.airRefreshHomeFeed = function (btn) {
         .finally(() => { if (btn && btn.classList) btn.classList.remove('spinning'); });
 };
 
-// --------------------------- color helpers ---------------------------
 function airHexToRgb(hex) {
     hex = String(hex || '').trim().replace('#', '');
     if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
@@ -246,7 +243,6 @@ function airAdjustColor(hex, { hue = 0, sat = 0, light = 0 } = {}) {
     return airHslToHex(hsl);
 }
 
-// ----------------------- loading dots (accent) -----------------------
 window.airDotsHtml = function (label) {
     return '<div class="air-dots-wrap"><div class="air-dots"><span></span><span></span><span></span></div>' +
         (label ? '<div class="air-dots-label">' + label + '</div>' : '') + '</div>';
@@ -263,7 +259,6 @@ function airEsc(value) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// --------------------- desktop settings bootstrap ---------------------
 window.AIR_SETTINGS = null;
 
 window.airLoadSettings = function (force) {
@@ -301,7 +296,6 @@ window.airSaveSettings = function (updates) {
     }).catch((e) => { airToast('Save failed'); throw e; });
 };
 
-// ----------------------- client error reporting -----------------------
 function airPostClientLog(level, message, stack, context) {
     try {
         fetch('/api/logs/client', {
@@ -329,7 +323,6 @@ window.addEventListener('unhandledrejection', (e) => {
     airPostClientLog('error', 'UnhandledRejection: ' + ((reason && (reason.message || reason)) || ''), reason && reason.stack, 'unhandledrejection @ ' + (window.location.hash || ''));
 });
 
-// ----------------------------- boot wiring -----------------------------
 document.addEventListener('DOMContentLoaded', () => {
     document.documentElement.setAttribute('lang', window.AIR_LANG || 'en');
 

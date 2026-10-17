@@ -1,7 +1,6 @@
 // AirBeats desktop — logs & crash reports page
 // Loaded as a classic script after script.js (desktop-native implementation).
 
-// ------------------------------ logs page ------------------------------
 window.airLogsData = null;
 window.airLogsFilter = { level: 'all', source: 'all' };
 

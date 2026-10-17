@@ -242,7 +242,6 @@ body {
     100% { height: 100%; }
 }
 
-/* ---- appearance options (size / position / background) ---- */
 .island.bg-black { background: #000000; }
 
 .island.size-small.minimized { width: 122px; height: 32px; border-radius: 16px; }

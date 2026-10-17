@@ -1,7 +1,6 @@
 // AirBeats desktop — content settings page
 // Loaded as a classic script after script.js (desktop-native implementation).
 
-// --------------------------- content settings ---------------------------
 window.AIR_LYRICS_PROVIDER_LIST = [
     ['lrclib', 'LRC Lib'],
     ['kugou', 'KuGou'],

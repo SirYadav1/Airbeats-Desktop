@@ -25,3 +25,7 @@ const { ipcRenderer: ytIpcR, contextBridge: ytCB } = require('electron');
 ytCB.exposeInMainWorld('ytmusicAPI', {
     openLogin: () => ytIpcR.invoke('yt-open-login')
 });
+ytCB.exposeInMainWorld('islandAPI', {
+    setOptions: (opts) => ytIpcR.send('island-set-options', opts || {}),
+    getOptions: () => ytIpcR.invoke('island-get-options')
+});

@@ -334,11 +334,95 @@ dIpc.handle('discord-set-status', async (e, s) => {
     } catch (err) { }
     return r;
 });
-dIpc.on('island-state', (e, state) => {
+// ---------------------------------------------------------------------------
+// Dynamic Island geometry — the window hugs the island's visible box.
+// The island BrowserWindow used to sit at a fixed 400x120 / 450x260 / 200x100
+// size, so its transparent margins swallowed clicks meant for whatever was
+// around the island (browser tabs, app buttons, ...). Now every state change
+// re-sizes the window to the island's real dimensions (+ small pads for the
+// margin/shadow), so only the pill itself captures clicks.
+// ---------------------------------------------------------------------------
+let a0LastIslandState = null;
+function a0IslandDims(state) {
+    const opts = a0IslandReadOpts() || {};
+    const table = {
+        small: { min: [122, 32], exp: [330, 160] },
+        medium: { min: [140, 36], exp: [380, 180] },
+        large: { min: [168, 44], exp: [430, 200] }
+    };
+    const t = table[opts.size] || table.medium;
+    return state === 'expanded' ? t.exp : t.min;
+}
+function a0IslandHug(state) {
     if (!dynamicIslandWindow || dynamicIslandWindow.isDestroyed()) return;
     try {
-        dynamicIslandWindow.setIgnoreMouseEvents(state === 'hidden');
+        const { screen } = require('electron');
+        const b = screen.getPrimaryDisplay().bounds;
+        const opts = a0IslandReadOpts() || {};
+        const pos = opts.position || 'center';
+        const dims = a0IslandDims(state);
+        const PAD_X = 14, PAD_TOP = 10, PAD_BOTTOM = 24;
+        const w = dims[0] + PAD_X * 2;
+        const h = PAD_TOP + dims[1] + PAD_BOTTOM;
+        let x;
+        if (pos === 'left') x = b.x;
+        else if (pos === 'right') x = b.x + b.width - w;
+        else x = b.x + Math.round((b.width - w) / 2);
+        dynamicIslandWindow.setBounds({ x, y: b.y + PAD_TOP, width: w, height: h });
     } catch (err) { }
+}
+function a0IslandApplyState(state) {
+    if (!dynamicIslandWindow || dynamicIslandWindow.isDestroyed()) return;
+    try { dynamicIslandWindow.setIgnoreMouseEvents(state === 'hidden', { forward: true }); } catch (err) { }
+    if (state === 'expanded') {
+        a0IslandHug('expanded');
+    } else if (state === 'minimized' && a0LastIslandState === 'expanded') {
+        // Shrink animation: keep the big window until the pill has animated
+        // down, then hug the smaller box.
+        a0IslandHug('expanded');
+        setTimeout(() => {
+            try {
+                if (dynamicIslandWindow && !dynamicIslandWindow.isDestroyed() && a0LastIslandState === 'minimized') a0IslandHug('minimized');
+            } catch (err) { }
+        }, 430);
+    } else {
+        a0IslandHug('minimized');
+    }
+    a0LastIslandState = state;
+}
+dIpc.on('island-state', (e, state) => {
+    a0IslandApplyState(String(state || 'hidden'));
+});
+
+// ---------------------------------------------------------------------------
+// Dynamic Island appearance options (size / position / background).
+// Stored in userData/island-options.json and pushed to the island window.
+// ---------------------------------------------------------------------------
+const a0IslandOptsFile = dLogPath.join(require('electron').app.getPath('userData'), 'island-options.json');
+function a0IslandReadOpts() {
+    try { return JSON.parse(dFs.readFileSync(a0IslandOptsFile, 'utf8')); } catch (e) { return null; }
+}
+function a0IslandSendOpts() {
+    if (!dynamicIslandWindow || dynamicIslandWindow.isDestroyed()) return;
+    try { dynamicIslandWindow.webContents.send('island-options', a0IslandReadOpts() || {}); } catch (e) { }
+}
+dIpc.on('island-set-options', (e, opts) => {
+    try { dFs.writeFileSync(a0IslandOptsFile, JSON.stringify(opts || {}), 'utf8'); } catch (err) { }
+    a0IslandSendOpts();
+});
+dIpc.handle('island-get-options', () => a0IslandReadOpts() || {});
+app.on('browser-window-created', (e, win) => {
+    win.webContents.on('did-finish-load', () => {
+        try {
+            if (win.webContents.getURL().indexOf('dynamic-island') !== -1) {
+                a0IslandSendOpts();
+                // Start click-through + hugged so the island never blocks
+                // clicks before its first state message arrives.
+                try { win.setIgnoreMouseEvents(true, { forward: true }); } catch (err) { }
+                a0IslandHug('minimized');
+            }
+        } catch (err) { }
+    });
 });
 
 dIpc.on('discord-activity', (e, data) => {
